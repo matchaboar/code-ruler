@@ -1,0 +1,4 @@
+exclude-newer = "2025-02-01T12:59:00Z"
+
+[pip]
+exclude-newer = "2025-02-01T12:59:00Z"

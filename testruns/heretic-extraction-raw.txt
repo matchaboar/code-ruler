@@ -1,0 +1,505 @@
+OpenTelemetry configuration OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE is not supported by Datadog.
+failed to send, dropping 1 traces to intake at http://localhost:8126/evp_proxy/v2/api/v2/llmobs after 5 retries
+failed to send, dropping 1 traces to intake at http://localhost:8126/evp_proxy/v2/api/v2/llmobs after 5 retries, 17 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/evp_proxy/v2/api/v2/llmobs after 5 retries, 11 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/evp_proxy/v2/api/v2/llmobs after 5 retries, 15 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/evp_proxy/v2/api/v2/llmobs after 5 retries, 17 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/evp_proxy/v2/api/v2/llmobs after 5 retries, 15 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/evp_proxy/v2/api/v2/llmobs after 5 retries, 15 additional messages skipped
+Processing 234 review comments...
+
+[1/234] PR #42: src/heretic/utils.py
+  Candidate: [best_practice] single-responsibility-functions: Functions should have a single responsibility
+
+[2/234] PR #42: src/heretic/utils.py
+  Candidate: [best_practice] default-arg-over-kwargs: Use default arguments instead of kwargs for optional parameters
+
+[3/234] PR #42: src/heretic/utils.py
+  Candidate: [function_usage] use-provided-parameters: Use Provided Function Parameters When Available
+
+[4/234] PR #169: src/heretic/utils.py
+  Candidate: [best_practice] cache-repeated-calls: Cache repeated function call results
+  Candidate: [best_practice] parallel-code-structure: Maintain parallel structure across similar code blocks
+
+[5/234] PR #169: src/heretic/utils.py
+  Candidate: [best_practice] minimize-repeated-static-output: Avoid repeating static information in repeated output
+
+[6/234] PR #169: src/heretic/main.py
+  Candidate: [best_practice] display-hardware-specs-details: Show detailed hardware specifications when reporting device info
+
+[7/234] PR #52: src/heretic/main.py
+  No rules extracted.
+
+[8/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] inclusive-threshold-ranges: Use Inclusive Bounds for Threshold Comparisons
+
+[9/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] no-magic-numbers: Avoid Magic Numbers in Code
+  Candidate: [best_practice] externalize-tuning-parameters: Make Tuning Parameters Configurable
+
+[10/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] clear-variable-naming: Use variable names that reflect their actual content
+  Candidate: [function_usage] document-api-behavior: Document unexpected API return values
+
+[11/234] PR #52: src/heretic/main.py
+  Candidate: [best_practice] constrained-parameter-ranges: Use theoretically justified parameter ranges in optimization
+  Candidate: [best_practice] document-experimental-parameters: Document the rationale for experimental parameter ranges
+
+[12/234] PR #52: src/heretic/model.py
+  Candidate: [function_usage] lora-alpha-scaling: LoRA alpha should match computation method
+
+[13/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] consistent-direction-scope: Maintain consistent scoping of directional parameters
+
+[14/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] do-preprocessing-once: Perform data transformations as early as possible
+
+[15/234] PR #52: src/heretic/model.py
+  Candidate: [function_usage] prefer-built-in-copy-params: Prefer built-in copy parameters when available
+
+[16/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] avoid-duplicate-operations: Avoid duplicate operations on data
+
+[17/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] prefer-assignment-over-out-param: Prefer assignment over 'out' parameters
+
+[18/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] upcast-early: Perform type upcasting early in the function
+
+[19/234] PR #52: config.default.toml
+  Candidate: [best_practice] consistent-naming-conventions: Use consistent naming conventions across the codebase
+
+[20/234] PR #52: src/heretic/model.py
+  Candidate: [lint] comment-punctuation: End comments with periods
+
+[21/234] PR #52: config.default.toml
+  Candidate: [best_practice] interdependent-settings-cohesion: Use enums for interdependent configuration flags
+
+[22/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] tensor-shape-normalization: Normalize tensor shapes when processing weights
+
+[23/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] comment-implementation-tradeoffs: Document implementation tradeoffs in code comments
+  Candidate: [best_practice] preserve-original-values: Store original values before modifications when needed later
+
+[24/234] PR #52: src/heretic/config.py
+  Candidate: [best_practice] document-commented-code: Document reasons for commented-out code
+
+[25/234] PR #52: src/heretic/config.py
+  Candidate: [best_practice] document-algorithmic-details: Document implementation details for algorithmic operations
+
+[26/234] PR #52: src/heretic/main.py
+  Candidate: [best_practice] naming-visual-distinction: Use visually distinct variable names for opposing concepts
+  Candidate: [best_practice] neutral-variable-names: Use neutral terminology in variable names
+
+[27/234] PR #52: src/heretic/main.py
+  Candidate: [best_practice] check-numerical-stability: Check for numerical stability in vector operations
+
+[28/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] make-magic-numbers-configurable: Make Domain-Specific Magic Numbers Configurable
+
+[29/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] avoid-config-duplication: Store and reuse configuration objects instead of individual values
+
+[30/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] avoid-unnecessary-type-cast: Avoid unnecessary type casting
+
+[31/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] justify-rank-impact: Justify high-rank transformations in ML models
+
+[32/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] comment-performance-impacts: Comment on Performance-Critical Operations
+
+[33/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] avoid-redundant-splits: Avoid redundantly splitting values across multiple components
+
+[34/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] validate-float-bounds: Validate boundary conditions for float ranges
+
+[35/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] consistent-dimension-transforms: Keep transformations consistent across relevant dimensions
+
+[36/234] PR #52: src/heretic/model.py
+  Candidate: [function_usage] use-named-args-torch: Use named arguments for PyTorch function parameters
+
+[37/234] PR #52: src/heretic/model.py
+  Candidate: [best_practice] consistent-data-processing: Keep data processing consistent across load and use
+
+[38/234] PR #157: src/heretic/utils.py
+  Candidate: [best_practice] sanitize-markdown-user-input: Sanitize user input used in markdown content
+
+[39/234] PR #157: src/heretic/main.py
+  Candidate: [best_practice] avoid-optional-null-empty: Prefer empty objects over null for optional values
+  Candidate: [best_practice] reduce-nesting-depth: Minimize conditional nesting depth
+
+[40/234] PR #116: src/heretic/main.py
+  Candidate: [best_practice] dependency-deletion-order: Delete objects in reverse dependency order
+  Candidate: [best_practice] document-platform-workarounds: Document platform-specific workarounds
+
+[41/234] PR #116: src/heretic/main.py
+  Candidate: [best_practice] no-del-for-cleanup: Don't use 'del' statements for cleanup
+
+[42/234] PR #116: src/heretic/main.py
+  Candidate: [best_practice] explicit-resource-cleanup: Clean up all related resources when reinitializing a system
+
+[43/234] PR #119: src/heretic/main.py
+  Candidate: [best_practice] avoid-magic-strings: Avoid Magic Strings - Use Named Constants
+  Candidate: [best_practice] config-values-in-settings: Store Configuration Values in Settings Class
+
+[44/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] prevent-hashing-collisions: Use unambiguous string representations when hashing data structures
+  Candidate: [lint] validate-hash-function-names: Use correct hash function names
+
+[45/234] PR #106: src/heretic/main.py
+  Candidate: [lint] comment-sentence-punctuation: Comments should use proper sentence punctuation
+
+[46/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] leverage-builtin-features: Leverage Built-in Library Features
+
+[47/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] document-transforms: Document non-obvious data transformations
+
+[48/234] PR #106: src/heretic/config.py
+  Candidate: [best_practice] derive-related-filenames: Derive related filenames automatically
+
+[49/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] clear-code-comments: Document complex code with clear comments
+
+[50/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] hide-implementation-details: Hide implementation details from user interfaces
+
+[51/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] prefer-object-serialization: Prefer Object Serialization Over Manual Field Processingfailed to send, dropping 1 traces to intake at http://localhost:8126/evp_proxy/v2/api/v2/llmobs after 5 retries, 19 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/v0.5/traces after 3 retries, 17 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/v0.5/traces after 3 retries, 13 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/v0.5/traces after 3 retries, 15 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/v0.5/traces after 3 retries, 17 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/v0.5/traces after 3 retries, 17 additional messages skipped
+
+
+[52/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] user-action-continuity: Provide fallback paths for user action rejections
+
+[53/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] configurable-paths: Make file/directory paths configurable
+
+[54/234] PR #106: src/heretic/utils.py
+  Candidate: [best_practice] document-collection-type-changes: Document changes to collection type handling
+
+[55/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] cleanup-temp-files: Clean up temporary files after use
+
+[56/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] avoid-redundant-prefixes: Avoid redundant namespace prefixes
+
+[57/234] PR #106: src/heretic/config.py
+  Candidate: [best_practice] directory-name-conflicts: Avoid directory names that could conflict with future features
+
+[58/234] PR #106: src/heretic/config.py
+  Candidate: [best_practice] required-config-fields: Configuration fields should have non-null default values
+
+[59/234] PR #106: src/heretic/main.py
+  Candidate: [lint] avoid-redundant-string-conversion: Avoid redundant string conversions
+
+[60/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] use-target-path-directly: Use target path directly when creating parent directories
+
+[61/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] cross-platform-validation: Validate code behavior on major operating systems
+
+[62/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] explicit-file-missing-handling: Handle file not found scenarios explicitly
+
+[63/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] inconsistent-storage-state: Storage state consistency must be maintained
+
+[64/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] no-swallow-errors: Do not silently swallow errors
+
+[65/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] consistent-color-semantics: Use consistent color semantics for status messages
+  Candidate: [best_practice] use-self-closing-tags: Use self-closing tag syntax for markup
+
+[66/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] avoid-redundant-prompts: Avoid redundant user prompts
+
+[67/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] handle-ctrl-c-cancellation: Handle cancellation/interruption cases explicitly
+
+[68/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] minimize-control-variables: Minimize control flag variables
+  Candidate: [best_practice] cohesive-operations: Keep related operations together
+
+[69/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] clear-file-operation-intent: Document file operation side effects
+
+[70/234] PR #106: src/heretic/main.py
+  Candidate: [function_usage] validate-trial-completion: Validate trial completion when checking optimization study progress
+
+[71/234] PR #106: src/heretic/main.py
+  Candidate: [lint] redundant-type-cast: Avoid redundant type casts
+
+[72/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] use-dict-get: Use dict.get() for safe key access
+  Candidate: [best_practice] avoid-redundant-calls: Avoid redundant function calls
+  Candidate: [best_practice] specific-exceptions: Raise specific exceptions instead of generic Exception
+
+[73/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] clear-error-state-initialization: Initialize error/completion states at function start
+
+[74/234] PR #106: .gitignore
+  Candidate: [best_practice] descriptive-gitignore-sections: Use descriptive section comments in .gitignore
+
+[75/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] no-path-traversal: Prevent path traversal in file paths derived from user input
+
+[76/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] simplify-single-item-lists: Simplify code that handles known single-item lists
+
+[77/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] avoid-flag-variables: Avoid using flag variables to control downstream logic
+
+[78/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] avoid-redundant-instantiation: Avoid redundant object instantiation
+
+[79/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] use-existing-state-checks: Use existing state enums/flags rather than creating redundant ones
+
+[80/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] validate-state-invariants: Validate state invariants when resuming saved application state
+
+[81/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] explicit-completion-conditions: Include extra conditions in completion checks
+
+[82/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] declare-variables-near-usage: Declare variables close to where they are used
+  Candidate: [best_practice] minimize-variable-scope: Minimize the scope and number of variables
+
+[83/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] simple-iteration-counts: Use simple, clear logic for iteration counts
+
+[84/234] PR #106: src/heretic/config.py
+  Candidate: [best_practice] settings-priority-clarity: Document settings source priority
+  Candidate: [function_usage] explicit-cli-args-handling: Explicitly handle CLI arguments in settings priority
+
+[85/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] name-matches-return-type: Function name should reflect return value type
+  Candidate: [best_practice] function-return-type-annotation: Functions should have return type annotations
+
+[86/234] PR #106: src/heretic/config.py
+  Candidate: [lint] field-colon-class-attr: Include colon after Field definitions in class attributes
+
+[87/234] PR #106: src/heretic/main.py
+  Candidate: [lint] no-trailing-newline: Avoid unnecessary blank lines at the end of code blocks
+
+[88/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] clean-up-unused-code: Remove unused code rather than commenting out or keeping dead code
+
+[89/234] PR #106: src/heretic/main.py
+  Candidate: [best_practice] typed-function-returns: Functions must have return type annotations
+
+[90/234] PR #108: src/heretic/model.py
+  Candidate: [best_practice] annotate-function-return-types: Function Return Types Must Be Annotated
+
+[91/234] PR #108: src/heretic/model.py
+  Candidate: [best_practice] avoid-abbreviations-in-names: Avoid abbreviations in identifier names
+  Candidate: [best_practice] use-pythonic-dict-key-check: Use 'in' operator for dictionary key checks
+  Candidate: [best_practice] specific-exceptions: Raise specific exception types
+
+[92/234] PR #108: src/heretic/model.py
+  Candidate: [lint] comment-style-standard: Comments should be complete sentences with proper capitalization and punctuation
+
+[93/234] PR #108: src/heretic/model.py
+  Candidate: [best_practice] minimal-parameter-passing: Pass only required parameters
+
+[94/234] PR #108: src/heretic/model.py
+  Candidate: [best_practice] maintain-backward-compatibility: Maintain backward compatibility when modifying model support
+
+[95/234] PR #108: src/heretic/model.py
+  Candidate: [function_usage] consistent-remote-code-trust: Use consistent patterns for handling remote code trust settings
+
+[96/234] PR #108: src/heretic/model.py
+  Candidate: [best_practice] simplest-config-check: Use the simplest possible configuration check
+
+[97/234] PR #110: src/heretic/main.py
+  Candidate: [function_usage] function-argument-count: Match function argument count exactly
+
+[98/234] PR #110: src/heretic/main.py
+  Candidate: [function_usage] validate-function-parameters: Pass correct parameter types when calling functions
+
+[99/234] PR #110: src/heretic/main.py
+  Candidate: [best_practice] match-function-return-doc: Function return values must match documented return types
+
+[100/234] PR #110: src/heretic/main.py
+  Candidate: [best_practice] annotate-function-return-type: Always annotate function return types
+
+[101/234] PR #110: src/heretic/main.py
+  Candidate: [best_practice] reusable-function-extraction: Only extract reusable functionality into separate functions
+  Candidate: [lint] remove-unused-parameters: Remove unused function parameters
+
+[102/234] PR #107: pyproject.toml
+  Candidate: [best_practice] sync-lock-dependencies: Keep dependency lock files in sync with package specificationsfailed to send, dropping 1 traces to intake at http://localhost:8126/evp_proxy/v2/api/v2/llmobs after 5 retries, 16 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/evp_proxy/v2/api/v2/llmobs after 5 retries, 16 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/evp_proxy/v2/api/v2/llmobs after 5 retries, 16 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/v0.5/traces after 3 retries, 16 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/evp_proxy/v2/api/v2/llmobs after 5 retries, 15 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/v0.5/traces after 3 retries, 11 additional messages skipped
+
+
+[103/234] PR #73: src/heretic/config.py
+  Candidate: [best_practice] respect-algorithm-autonomy: Respect ML algorithm autonomy
+
+[104/234] PR #73: src/heretic/main.py
+  Candidate: [best_practice] test-changes-impacts: Test impacts before committing optimization changes
+
+[105/234] PR #73: src/heretic/main.py
+  Candidate: [function_usage] conditional-sampling-tpe: Avoid conditional parameters with multivariate TPE sampling
+
+[106/234] PR #73: src/heretic/main.py
+  Candidate: [best_practice] meaningful-ui-information: Only display UI information that provides actionable value
+
+[107/234] PR #73: src/heretic/utils.py
+  Candidate: [best_practice] prefer-simple-optimization: Prefer simple optimization approaches unless complexity is justified
+  Candidate: [best_practice] validate-optimization-improvements: Validate optimization improvements with thorough testing
+
+[108/234] PR #73: src/heretic/main.py
+  Candidate: [best_practice] consistent-variable-references: Use consistent variable references throughout a function
+
+[109/234] PR #73: src/heretic/config.py
+  Candidate: [best_practice] accurate-parameter-descriptions: Parameter descriptions must be technically accurate
+
+[110/234] PR #73: src/heretic/main.py
+  Candidate: [best_practice] pareto-sort-optimal: Sort multi-objective optimization results by all objectives
+  Candidate: [best_practice] explicit-state-check: Explicitly check operation state before processing
+
+[111/234] PR #73: src/heretic/evaluator.py
+  Candidate: [best_practice] preserve-variable-semantics: Preserve semantic meaning of domain variables
+
+[112/234] PR #76: src/heretic/main.py
+  Candidate: [best_practice] meaningful-variable-purpose: Variables should have clear and obvious purpose
+
+[113/234] PR #76: src/heretic/main.py
+  Candidate: [best_practice] avoid-redundant-code: Avoid redundant code duplication
+
+[114/234] PR #76: src/heretic/main.py
+  Candidate: [best_practice] avoid-scattered-conditionals: Avoid scattered repetitive conditionals
+
+[115/234] PR #76: src/heretic/main.py
+  Candidate: [best_practice] maintain-logical-code-order: Maintain logical code ordering within functions
+
+[116/234] PR #76: src/heretic/main.py
+  Candidate: [best_practice] explicit-empty-string-check: Check for both None and empty string explicitly
+
+[117/234] PR #76: src/heretic/main.py
+  Candidate: [best_practice] unclear-infinite-loop: Avoid unclear infinite loops without documented purpose
+
+[118/234] PR #76: src/heretic/main.py
+  Candidate: [best_practice] avoid-redundant-checks: Avoid redundant conditional checks
+
+[119/234] PR #76: src/heretic/main.py
+  Candidate: [best_practice] maintain-code-comments: Maintain explanatory code comments when modifying code
+  Candidate: [best_practice] review-changes-carefully: Review your own code changes carefully before submission
+
+[120/234] PR #86: src/heretic/main.py
+  Candidate: [lint] consistent-indentation: Maintain consistent indentation style throughout the file
+
+[121/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] module-vs-parameter-handling: Handle both Module and Parameter types in neural network traversal
+
+[122/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] matrix-tensor-device-match: Ensure tensor operations occur on matching devices
+  Candidate: [best_practice] document-matrix-operations: Document matrix operation shapes and intentions
+
+[123/234] PR #60: README.md
+  Candidate: [best_practice] avoid-fork-attribution: Remove fork references when repository is independent
+
+[124/234] PR #60: config.default.toml
+  Candidate: [best_practice] prefer-enums-over-flags: Prefer enums over boolean flags for multi-option settings
+
+[125/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] config-param-type-consistency: Ensure configuration parameter types are consistent across related API calls
+
+[126/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] descriptive-output-labels: Use clear and descriptive labels in log/output messages
+
+[127/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] model-wrapper-compatibility: Ensure model wrapper compatibility across variants
+
+[128/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] type-aware-hasattr: Use hasattr() checks to handle polymorphic types
+
+[129/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] validate-target-modules: Validate target modules before applying model adapters
+
+[130/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] explicit-type-cast-justification: Document explicit type conversions
+
+[131/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] handle-all-code-paths: Handle all possible code paths and configurations
+
+[132/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] precise-return-type-hints: Use precise type hints in function return annotations
+
+[133/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] validate-type-before-add: Validate types before adding to collections
+  Candidate: [function_usage] tensor-type-check: Validate tensor types when processing ML model data
+
+[134/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] module-validation-upfront: Validate module properties early
+  Candidate: [lint] attribute-checks-before-usage: Check for attributes before accessing them
+
+[135/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] code-path-separation: Keep code path-specific logic separate
+
+[136/234] PR #60: test_lora.py
+  Candidate: [best_practice] test-data-size: Keep test data and dependencies minimal
+
+[137/234] PR #60: .gitattributes
+  Candidate: [best_practice] explicit-text-file-handling: Use explicit text file handling in Git
+  Candidate: [best_practice] avoid-lockfile-binary: Treat lockfiles as text files in Git
+
+[138/234] PR #60: config.default.toml
+  Candidate: [best_practice] document-config-options: Document configuration options with all valid choices
+
+[139/234] PR #60: src/heretic/main.py
+  Candidate: [best_practice] instance-method-over-function: Prefer instance methods over standalone functions that operate on class instances
+
+[140/234] PR #60: src/heretic/main.py
+  Candidate: [best_practice] separation-of-concerns: Maintain clear separation of concerns between modules
+  Candidate: [best_practice] input-handling-location: Centralize input handling in main entry points
+
+[141/234] PR #60: src/heretic/main.py
+  Candidate: [best_practice] validate-memory-requirements: Validate memory requirements before heavy operations
+
+[142/234] PR #60: src/heretic/main.py
+  Candidate: [best_practice] respect-cancel-actions: Respect user cancellation actions
+
+[143/234] PR #60: src/heretic/main.py
+  Candidate: [best_practice] memory-efficient-load-order: Load resource-intensive operations in RAM before VRAM when possible
+  Candidate: [best_practice] memory-requirement-warnings: Provide clear memory requirement warnings for resource-intensive operations
+
+[144/234] PR #60: src/heretic/main.py
+  Candidate: [best_practice] consistent-dtype-settings: Use consistent data type settings across model operations
+
+[145/234] PR #60: src/heretic/main.py
+  Candidate: [best_practice] avoid-premature-optimization: Avoid premature optimization and unnecessary complexity
+
+[146/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] handle-critical-failures: Handle critical failures immediately
+
+[147/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] keep-static-kwargs: Keep static keyword arguments in function calls
+
+[148/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] error-handling-completeness: Handle all error cases explicitly
+
+[149/234] PR #60: src/heretic/model.py
+  Candidate: [best_practice] document-error-handling: Document expected error scenarios in error handling blocks
+  Candidate: [best_practice] specific-exception-handling: Handle specific exceptions rather than catching all exceptions
+
+[150/234] PR #60: src/heretic/main.py
+  Candidate: [best_practice] memory-warning-for-large-ops: Warn users about significant memory operations
+
+[151/234] PR #60: src/heretic/main.py
+  Candidate: [best_practice] error-handling-clarity: Document error scenarios in function docstringsfailed to send, dropping 1 traces to intake at http://localhost:8126/evp_proxy/v2/api/v2/llmobs after 5 retries, 15 additional messages skipped
+failed to send, dropping 1 traces to intake at http://localhost:8126/evp_proxy/v2/api/v2/llmobs after 5 retries, 17 additional messages skipped

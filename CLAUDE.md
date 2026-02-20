@@ -1,0 +1,1 @@
+- Do not use python or pip. Only use uv.
