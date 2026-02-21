@@ -2,9 +2,7 @@
 
 ## `TO RUN, USE ./start.sh`
 
-<a href="https://youtu.be/B43seaULG2o">
-  <img src="https://img.youtube.com/vi/B43seaULG2o/maxresdefault.jpg" alt="Code Ruler Demo Video" width="600">
-</a>
+[![Code Ruler Demo Video](https://img.youtube.com/vi/B43seaULG2o/0.jpg)](https://www.youtube.com/watch?v=B43seaULG2o)
 
 ![Code Ruler](image.png)
 
