@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Callable
 
 from anthropic import AnthropicBedrock
 from sqlalchemy.orm import Session
@@ -18,6 +18,7 @@ from code_ruler.extraction.context_builder import ExtractionContext, build_conte
 from code_ruler.extraction.function_type_gen import generate_function_type
 from code_ruler.extraction.rule_deduplicator import check_duplicate
 from code_ruler.extraction.rule_extractor import extract_rules_from_context
+from code_ruler.llm.client import TraceCollector, set_trace_collector
 from code_ruler.llm.schemas import CandidateRule
 
 
@@ -50,6 +51,10 @@ def run_pipeline(
     for i, context in enumerate(contexts, 1):
         print(f"\n[{i}/{len(contexts)}] PR #{context.pr_number}: {context.file_path}")
 
+        # Set up a trace collector for this review step
+        collector = TraceCollector()
+        set_trace_collector(collector)
+
         if on_review:
             on_review(
                 "review_start",
@@ -69,7 +74,9 @@ def run_pipeline(
                     index=i, total=len(contexts),
                     pr_number=context.pr_number, file_path=context.file_path,
                     error=str(e),
+                    dd_traces=collector.to_dicts(),
                 )
+            set_trace_collector(None)
             continue
         if not candidates:
             print("  No rules extracted.")
@@ -79,7 +86,9 @@ def run_pipeline(
                     index=i, total=len(contexts),
                     pr_number=context.pr_number, file_path=context.file_path,
                     candidates=[],
+                    dd_traces=collector.to_dicts(),
                 )
+            set_trace_collector(None)
             continue
 
         review_candidates = []
@@ -126,7 +135,10 @@ def run_pipeline(
                 index=i, total=len(contexts),
                 pr_number=context.pr_number, file_path=context.file_path,
                 candidates=review_candidates,
+                dd_traces=collector.to_dicts(),
             )
+
+        set_trace_collector(None)
 
     session.commit()
     return all_candidates

@@ -9,14 +9,14 @@ import sys
 from dotenv import load_dotenv
 
 load_dotenv()
-from pathlib import Path
+from pathlib import Path  # noqa: E402
 
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from fastapi import FastAPI  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 
-from rule_viewer.api.routes import get_db, router
+from rule_viewer.api.routes import get_db, router  # noqa: E402
 
 app = FastAPI(title="Code Ruler - Rule Viewer", version="0.1.0")
 app.include_router(router)
@@ -25,8 +25,6 @@ app.include_router(router)
 _frontend_dist = Path(__file__).parent / "frontend" / "dist"
 if _frontend_dist.exists():
     from fastapi.responses import FileResponse
-    from starlette.routing import Mount
-    from starlette.staticfiles import StaticFiles as StarletteStatic
 
     # Mount static assets first so JS/CSS/images are served directly
     app.mount("/assets", StaticFiles(directory=str(_frontend_dist / "assets")), name="assets")
@@ -75,6 +73,18 @@ def configure_db(db_path: str) -> None:
     app.dependency_overrides[get_db] = _get_db
 
 
+def _build_frontend() -> None:
+    """Build the frontend so the served bundle is always up-to-date."""
+    import subprocess
+
+    frontend_dir = Path(__file__).parent / "frontend"
+    if not (frontend_dir / "package.json").exists():
+        return
+    print("Building frontend...")
+    subprocess.run(["npm", "run", "build"], cwd=str(frontend_dir), check=True)
+    print("Frontend build complete.")
+
+
 def app_cli(argv: list[str] | None = None) -> None:
     """CLI wrapper for running the rule viewer with uvicorn."""
     parser = argparse.ArgumentParser(
@@ -87,13 +97,28 @@ def app_cli(argv: list[str] | None = None) -> None:
 
     args = parser.parse_args(argv)
 
-    configure_db(args.db)
-
-    # Initialize Datadog LLM Observability in the main thread before any
-    # anthropic imports so ddtrace can patch the library for tracing.
+    # Initialize Datadog LLM Observability BEFORE configure_db() so ddtrace
+    # patches the anthropic library before any transitive imports load it.
     from code_ruler.llm.client import init_llm_obs
 
     init_llm_obs()
+
+    configure_db(args.db)
+
+    # Initialize DBOS durable workflows if Postgres URL is configured.
+    dbos_pg_url = os.environ.get("DBOS_SYSTEM_DATABASE_URL")
+    if dbos_pg_url:
+        from dbos import DBOS, DBOSConfig
+
+        from rule_viewer.api.pipeline import mark_dbos_launched
+
+        config: DBOSConfig = {"name": "code-ruler", "system_database_url": dbos_pg_url}
+        DBOS(fastapi=app, config=config)
+        DBOS.launch()
+        mark_dbos_launched()
+
+    # Always rebuild the frontend so the served bundle reflects the latest source.
+    _build_frontend()
 
     import uvicorn
 

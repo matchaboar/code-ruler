@@ -1,1 +1,2 @@
 - Do not use python or pip. Only use uv.
+- Do not use docker or docker-compose. Only use podman and podman-compose.

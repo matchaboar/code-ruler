@@ -265,10 +265,102 @@ function PREventCard({ event }: { event: JobEvent }) {
   );
 }
 
+// ---- DD Trace Section (collapsible) ----
+
+function DDTraceSection({ traces }: { traces: any[] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!traces || traces.length === 0) return null;
+
+  const allOk = traces.every((t: any) => t.ok);
+  const failCount = traces.filter((t: any) => !t.ok).length;
+
+  return (
+    <div style={{ marginTop: "6px", marginLeft: "18px" }}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          background: "none",
+          border: "none",
+          color: "#64748b",
+          fontSize: "11px",
+          cursor: "pointer",
+          padding: "2px 0",
+          display: "flex",
+          alignItems: "center",
+          gap: "4px",
+        }}
+      >
+        <span style={{ fontSize: "10px" }}>{expanded ? "\u25BC" : "\u25B6"}</span>
+        <span
+          style={{
+            display: "inline-block",
+            width: "6px",
+            height: "6px",
+            borderRadius: "50%",
+            background: allOk ? "#a855f7" : "#ef4444",
+            flexShrink: 0,
+          }}
+        />
+        DD Traces ({traces.length} call{traces.length !== 1 ? "s" : ""}
+        {failCount > 0 ? `, ${failCount} failed` : ", all sent"})
+      </button>
+      {expanded && (
+        <div
+          style={{
+            marginTop: "4px",
+            padding: "8px 10px",
+            borderRadius: "6px",
+            background: "#faf5ff",
+            border: "1px solid #e9d5ff",
+            fontSize: "11px",
+            fontFamily: "monospace",
+          }}
+        >
+          {traces.map((t: any, i: number) => (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "2px 0",
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: "6px",
+                  height: "6px",
+                  borderRadius: "50%",
+                  background: t.ok ? "#22c55e" : "#ef4444",
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ color: "#6b7280" }}>LLM call {i + 1}</span>
+              {t.trace_id ? (
+                <span style={{ color: "#7c3aed" }}>trace_id: {t.trace_id}</span>
+              ) : (
+                <span style={{ color: "#94a3b8" }}>no trace_id</span>
+              )}
+              {!t.ok && (
+                <span style={{ color: "#dc2626" }}>
+                  FAILED{t.error ? `: ${t.error}` : ""}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---- Review Event Card ----
 
 function ReviewEventCard({ event }: { event: JobEvent }) {
-  const { index, total, pr_number, file_path, candidates, error } = event.data;
+  const { index, total, pr_number, file_path, candidates, error, dd_traces } =
+    event.data;
   const isError = event.type === "review_error";
   const isProcessing = event.type === "review_start";
 
@@ -287,7 +379,7 @@ function ReviewEventCard({ event }: { event: JobEvent }) {
           display: "flex",
           alignItems: "center",
           gap: "10px",
-          marginBottom: candidates?.length ? "8px" : 0,
+          marginBottom: candidates?.length || dd_traces?.length ? "8px" : 0,
         }}
       >
         {isProcessing && (
@@ -386,6 +478,7 @@ function ReviewEventCard({ event }: { event: JobEvent }) {
           ))}
         </div>
       )}
+      <DDTraceSection traces={dd_traces} />
     </div>
   );
 }
@@ -897,10 +990,10 @@ function RepoStatsSection({
     return () => clearInterval(id);
   }, []);
 
-  const handleResume = async (repoFullName: string) => {
+  const handleResume = async (repoFullName: string, limit?: number) => {
     setResuming(repoFullName);
     try {
-      const resp = await startExtractRules(undefined, false, repoFullName);
+      const resp = await startExtractRules(limit, false, repoFullName);
       onJobCreated?.(resp.job_id);
     } catch (e) {
       alert(`Failed to start: ${e}`);
@@ -963,24 +1056,43 @@ function RepoStatsSection({
               </div>
             )}
             {r.unprocessed_comments > 0 && (
-              <button
-                onClick={() => handleResume(r.full_name)}
-                disabled={resuming !== null}
-                style={{
-                  padding: "4px 12px",
-                  borderRadius: "6px",
-                  border: "none",
-                  background: resuming === r.full_name ? "#94a3b8" : "#6366f1",
-                  color: "#fff",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  cursor: resuming !== null ? "not-allowed" : "pointer",
-                  whiteSpace: "nowrap",
-                  flexShrink: 0,
-                }}
-              >
-                {resuming === r.full_name ? "Starting..." : "Resume Extraction"}
-              </button>
+              <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                <button
+                  onClick={() => handleResume(r.full_name)}
+                  disabled={resuming !== null}
+                  style={{
+                    padding: "4px 12px",
+                    borderRadius: "6px",
+                    border: "none",
+                    background: resuming === r.full_name ? "#94a3b8" : "#6366f1",
+                    color: "#fff",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: resuming !== null ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {resuming === r.full_name ? "Starting..." : "Resume All"}
+                </button>
+                <button
+                  onClick={() => handleResume(r.full_name, 10)}
+                  disabled={resuming !== null}
+                  title="Quick run: only process 10 PRs"
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #6366f1",
+                    background: resuming === r.full_name ? "#94a3b8" : "#eef2ff",
+                    color: resuming === r.full_name ? "#fff" : "#6366f1",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: resuming !== null ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Quick [10]
+                </button>
+              </div>
             )}
           </div>
         ))}

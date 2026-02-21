@@ -31,6 +31,18 @@ class JobInfo(BaseModel):
 
 _jobs: dict[str, JobInfo] = {}
 _db_path: str | None = None
+_dbos_launched: bool = False
+
+
+def mark_dbos_launched() -> None:
+    """Called after DBOS.launch() succeeds."""
+    global _dbos_launched
+    _dbos_launched = True
+
+
+def _dbos_enabled() -> bool:
+    """Return True when DBOS has been initialized and launched."""
+    return _dbos_launched
 
 
 def configure_db_path(db_path: str) -> None:
@@ -93,11 +105,24 @@ def _run_in_thread(job: JobInfo, target: callable, args: tuple) -> None:
 
 def start_extract_prs_job(repo_url: str, limit: int | None = None) -> str:
     """Start a background job to extract PRs from a GitHub repo."""
+    job_id = uuid.uuid4().hex[:12]
+    db_path = get_db_path()
+
+    if _dbos_enabled():
+        from dbos import DBOS, SetWorkflowID
+
+        from code_ruler.workflows.pr_extraction import extract_prs_workflow
+
+        workflow_id = f"extract-prs-{job_id}"
+        with SetWorkflowID(workflow_id):
+            DBOS.start_workflow(extract_prs_workflow, db_path, repo_url, job_id, limit)
+        return job_id
+
+    # Legacy thread-based path
     from github_extractor.client import create_github_client
     from github_extractor.database import get_engine, get_session_factory, init_db
     from github_extractor.extractor import extract_repo
 
-    job_id = uuid.uuid4().hex[:12]
     job = JobInfo(
         job_id=job_id,
         kind="extract-prs",
@@ -108,8 +133,6 @@ def start_extract_prs_job(repo_url: str, limit: int | None = None) -> str:
         started_at=datetime.now(timezone.utc).isoformat(),
     )
     _jobs[job_id] = job
-
-    db_path = get_db_path()
 
     def _on_pr(pr_number: int, pr_title: str, author: str, status: str) -> None:
         job.events.append(JobEvent(
@@ -139,11 +162,27 @@ def start_extract_rules_job(
     repo_full_name: str | None = None,
 ) -> str:
     """Start a background job to extract rules from PR data."""
+    job_id = uuid.uuid4().hex[:12]
+    db_path = get_db_path()
+
+    if _dbos_enabled():
+        from dbos import DBOS, SetWorkflowID
+
+        from code_ruler.workflows.rule_extraction import extract_rules_workflow
+
+        workflow_id = f"extract-rules-{job_id}"
+        with SetWorkflowID(workflow_id):
+            DBOS.start_workflow(
+                extract_rules_workflow, db_path, job_id,
+                limit, dry_run, repo_full_name,
+            )
+        return job_id
+
+    # Legacy thread-based path
     from code_ruler.db.base import get_engine, get_session_factory, init_db
     from code_ruler.llm.client import DEFAULT_MODEL, get_client
     from code_ruler.pipeline import run_pipeline
 
-    job_id = uuid.uuid4().hex[:12]
     job = JobInfo(
         job_id=job_id,
         kind="extract-rules",
@@ -154,8 +193,6 @@ def start_extract_rules_job(
         started_at=datetime.now(timezone.utc).isoformat(),
     )
     _jobs[job_id] = job
-
-    db_path = get_db_path()
 
     def _on_review(event_type: str, **data: Any) -> None:
         job.events.append(JobEvent(type=event_type, data=data))
@@ -185,8 +222,103 @@ def start_extract_rules_job(
     return job_id
 
 
+def start_quick_fetch_prs_job(repo_url: str, limit: int = 10) -> str:
+    """Start a quick-fetch job: extract a small batch of PRs."""
+    job_id = uuid.uuid4().hex[:12]
+    db_path = get_db_path()
+
+    if _dbos_enabled():
+        from dbos import DBOS, SetWorkflowID
+
+        from code_ruler.workflows.quick_batch import quick_fetch_prs
+
+        workflow_id = f"quick-fetch-prs-{job_id}"
+        with SetWorkflowID(workflow_id):
+            DBOS.start_workflow(quick_fetch_prs, db_path, job_id, repo_url, limit)
+        return job_id
+
+    # Delegate to the full extract-prs path for legacy mode
+    return start_extract_prs_job(repo_url, limit=limit)
+
+
+def start_quick_extract_rules_job(limit: int = 10, repo_filter: str | None = None) -> str:
+    """Start a quick-extract job: extract rules from a small batch of comments."""
+    job_id = uuid.uuid4().hex[:12]
+    db_path = get_db_path()
+
+    if _dbos_enabled():
+        from dbos import DBOS, SetWorkflowID
+
+        from code_ruler.workflows.quick_batch import quick_extract_rules
+
+        workflow_id = f"quick-extract-rules-{job_id}"
+        with SetWorkflowID(workflow_id):
+            DBOS.start_workflow(quick_extract_rules, db_path, job_id, limit, repo_filter)
+        return job_id
+
+    # Delegate to the full extract-rules path for legacy mode
+    return start_extract_rules_job(limit=limit, repo_full_name=repo_filter)
+
+
+def start_generate_enforcer_job(rule_slug: str) -> str:
+    """Start a background job to generate an enforcer script for a rule."""
+    job_id = uuid.uuid4().hex[:12]
+    db_path = get_db_path()
+
+    from code_ruler.db.base import get_engine, get_session_factory, init_db
+    from code_ruler.llm.client import DEFAULT_MODEL, get_client
+
+    job = JobInfo(
+        job_id=job_id,
+        kind="generate-enforcer",
+        status="running",
+        logs=[],
+        events=[],
+        started_at=datetime.now(timezone.utc).isoformat(),
+    )
+    _jobs[job_id] = job
+
+    def _do_generate() -> None:
+        engine = get_engine(db_path)
+        init_db(engine)
+        factory = get_session_factory(engine)
+        client = get_client()
+        print(f"Generating enforcer for rule '{rule_slug}'...")
+        with factory() as session:
+            from code_ruler.db.models import Rule
+            rule = session.query(Rule).filter_by(slug=rule_slug).first()
+            if not rule:
+                raise ValueError(f"Rule '{rule_slug}' not found")
+
+            from code_ruler.enforcer.generator import generate_enforcer
+            enforcer = generate_enforcer(client, session, rule, DEFAULT_MODEL)
+            print(f"Enforcer generation complete. Status: {enforcer.status}")
+            job.events.append(JobEvent(
+                type="enforcer_done",
+                data={"rule_slug": rule_slug, "status": enforcer.status},
+            ))
+
+    t = threading.Thread(target=_run_in_thread, args=(job, _do_generate, ()), daemon=True)
+    t.start()
+    return job_id
+
+
 def start_quick_run_job(repo_url: str, pr_limit: int = 10) -> str:
     """Start a quick run: extract PRs then extract rules in one go."""
+    job_id = uuid.uuid4().hex[:12]
+    db_path = get_db_path()
+
+    if _dbos_enabled():
+        from dbos import DBOS, SetWorkflowID
+
+        from code_ruler.workflows.quick_batch import quick_run_workflow
+
+        workflow_id = f"quick-run-{job_id}"
+        with SetWorkflowID(workflow_id):
+            DBOS.start_workflow(quick_run_workflow, db_path, job_id, repo_url, pr_limit)
+        return job_id
+
+    # Legacy thread-based path
     from github_extractor.client import create_github_client
     from github_extractor.database import get_engine as gh_get_engine
     from github_extractor.database import get_session_factory as gh_get_session_factory
@@ -197,7 +329,6 @@ def start_quick_run_job(repo_url: str, pr_limit: int = 10) -> str:
     from code_ruler.llm.client import DEFAULT_MODEL, get_client
     from code_ruler.pipeline import run_pipeline
 
-    job_id = uuid.uuid4().hex[:12]
     job = JobInfo(
         job_id=job_id,
         kind="quick-run",
@@ -208,8 +339,6 @@ def start_quick_run_job(repo_url: str, pr_limit: int = 10) -> str:
         started_at=datetime.now(timezone.utc).isoformat(),
     )
     _jobs[job_id] = job
-
-    db_path = get_db_path()
 
     def _on_pr(pr_number: int, pr_title: str, author: str, status: str) -> None:
         job.events.append(JobEvent(

@@ -12,6 +12,7 @@ class RuleListItem(BaseModel):
     title: str
     is_active: bool
     has_decorator: bool
+    has_enforcer: bool
     provenance_count: int
 
 
@@ -81,6 +82,16 @@ class QuickRunRequest(BaseModel):
     pr_limit: int = 10
 
 
+class QuickFetchRequest(BaseModel):
+    repo_url: str
+    limit: int = 10
+
+
+class QuickExtractRequest(BaseModel):
+    limit: int = 10
+    repo_filter: str | None = None
+
+
 class JobStartResponse(BaseModel):
     job_id: str
 
@@ -100,6 +111,51 @@ class JobStatusResponse(BaseModel):
     started_at: str
     finished_at: str | None = None
     error: str | None = None
+    workflow_id: str | None = None
+
+
+class GenerateVideoRequest(BaseModel):
+    prompt: str | None = None
+
+
+class VideoResponse(BaseModel):
+    task_id: str
+    status: str
+    file_id: str | None = None
+    download_url: str | None = None
+    error: str | None = None
+
+
+class EnforcerListItem(BaseModel):
+    rule_slug: str
+    rule_title: str
+    category: str
+    severity: str
+    status: str
+    check_type: str
+    has_decorator: bool
+    attempt_count: int
+    created_at: str
+
+
+class EnforcerDetail(BaseModel):
+    rule_slug: str
+    rule_title: str
+    category: str
+    severity: str
+    status: str
+    check_type: str
+    has_decorator: bool
+    attempt_count: int
+    enforcer_source: str
+    decorator_source: str | None
+    test_code: str | None
+    test_result: str
+    test_output: str | None
+    diff: str | None
+    dd_traces: list[dict] | None
+    created_at: str
+    updated_at: str
 
 
 class RepoStatsResponse(BaseModel):

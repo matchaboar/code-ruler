@@ -6,7 +6,6 @@ import tempfile
 from pathlib import Path
 
 from rule_marker.linter.engine import LintEngine
-from rule_marker.linter.violations import Violation
 
 
 def test_bare_except_detected():

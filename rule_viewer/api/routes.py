@@ -10,22 +10,36 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from code_ruler.db.models import FunctionTypeRule, Rule, RuleProvenance
+from code_ruler.db.models import EnforcerScript, FunctionTypeRule, Rule, RuleProvenance
 from github_extractor.models import PullRequest, Repository, ReviewComment
-from rule_viewer.api.pipeline import get_all_jobs, get_job, start_extract_prs_job, start_extract_rules_job, start_quick_run_job
+from rule_viewer.api.pipeline import (
+    get_all_jobs,
+    get_job,
+    start_extract_prs_job,
+    start_extract_rules_job,
+    start_generate_enforcer_job,
+    start_quick_extract_rules_job,
+    start_quick_fetch_prs_job,
+    start_quick_run_job,
+)
 from rule_viewer.api.schemas import (
     CredentialsStatusResponse,
     ExtractPRsRequest,
     ExtractRulesRequest,
+    GenerateVideoRequest,
+    JobEventResponse,
     JobStartResponse,
     JobStatusResponse,
     ProvenanceItem,
+    QuickExtractRequest,
+    QuickFetchRequest,
     QuickRunRequest,
     RepoStatsResponse,
     RuleDetail,
     RuleListItem,
     ServiceStatus,
     StatsResponse,
+    VideoResponse,
 )
 
 router = APIRouter(prefix="/api")
@@ -154,6 +168,42 @@ def get_provenance(slug: str, db: Session = Depends(get_db)) -> list[ProvenanceI
     return items
 
 
+@router.post("/rules/{slug}/generate-video", response_model=VideoResponse)
+def generate_video(
+    slug: str,
+    req: GenerateVideoRequest,
+    db: Session = Depends(get_db),
+) -> VideoResponse:
+    """Generate an animated video from a rule's code examples via Minimax I2V."""
+    rule = db.query(Rule).filter_by(slug=slug).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+
+    from code_ruler.llm.schemas import CandidateRule
+    from code_ruler.video.generator import generate_rule_video
+
+    candidate = CandidateRule(
+        slug=rule.slug,
+        category=rule.category,
+        severity=rule.severity,
+        title=rule.title,
+        description=rule.description,
+        positive_example=rule.positive_example,
+        negative_example=rule.negative_example,
+        rationale=rule.rationale,
+    )
+
+    result = generate_rule_video(candidate, prompt=req.prompt)
+
+    return VideoResponse(
+        task_id=result.task_id,
+        status=result.status,
+        file_id=result.file_id,
+        download_url=result.download_url,
+        error=result.error,
+    )
+
+
 @router.get("/stats", response_model=StatsResponse)
 def get_stats(db: Session = Depends(get_db)) -> StatsResponse:
     """Get summary statistics."""
@@ -180,17 +230,19 @@ def check_credentials() -> CredentialsStatusResponse:
     """Check connectivity to external services (Bedrock, Datadog, GitHub)."""
     services: list[ServiceStatus] = []
 
-    # Check AWS Bedrock
+    # Check AWS Bedrock — verify credentials via STS to avoid noisy LLMObs traces
     try:
-        from code_ruler.llm.client import get_client, DEFAULT_MODEL
+        import boto3
 
-        client = get_client()
-        resp = client.messages.create(
-            model=DEFAULT_MODEL,
-            max_tokens=8,
-            messages=[{"role": "user", "content": "Hi"}],
-        )
-        services.append(ServiceStatus(name="AWS Bedrock", ok=True, detail=f"Model: {DEFAULT_MODEL}"))
+        from code_ruler.llm.client import DEFAULT_MODEL
+
+        sts = boto3.client("sts", region_name=os.environ.get("AWS_DEFAULT_REGION", "us-west-2"))
+        identity = sts.get_caller_identity()
+        services.append(ServiceStatus(
+            name="AWS Bedrock",
+            ok=True,
+            detail=f"Model: {DEFAULT_MODEL} | Account: {identity['Account']}",
+        ))
     except Exception as e:
         services.append(ServiceStatus(name="AWS Bedrock", ok=False, detail=str(e)[:200]))
 
@@ -250,8 +302,34 @@ def start_extract_rules(req: ExtractRulesRequest) -> JobStartResponse:
 
 
 @router.get("/pipeline/jobs/{job_id}", response_model=JobStatusResponse)
-def get_job_status(job_id: str) -> JobStatusResponse:
+def get_job_status(job_id: str, db: Session = Depends(get_db)) -> JobStatusResponse:
     """Get the status and logs of a pipeline job."""
+    from rule_viewer.api.pipeline import _dbos_enabled
+
+    if _dbos_enabled():
+        from code_ruler.db.models import PipelineEvent, PipelineJob
+
+        pj = db.get(PipelineJob, job_id)
+        if not pj:
+            raise HTTPException(status_code=404, detail="Job not found")
+        events = db.query(PipelineEvent).filter_by(job_id=job_id).order_by(PipelineEvent.created_at).all()
+        return JobStatusResponse(
+            job_id=pj.id,
+            kind=pj.job_type,
+            status=pj.status,
+            logs=[],
+            events=[
+                JobEventResponse(type=e.event_type, data=e.event_data_json or {})
+                for e in events
+            ],
+            repo_url=pj.repo_url,
+            started_at=pj.created_at.isoformat(),
+            finished_at=pj.finished_at.isoformat() if pj.finished_at else None,
+            error=pj.error_message,
+            workflow_id=pj.workflow_id,
+        )
+
+    # Legacy in-memory path
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -259,9 +337,45 @@ def get_job_status(job_id: str) -> JobStatusResponse:
 
 
 @router.get("/pipeline/jobs", response_model=list[JobStatusResponse])
-def list_jobs() -> list[JobStatusResponse]:
+def list_jobs(db: Session = Depends(get_db)) -> list[JobStatusResponse]:
     """List all pipeline jobs."""
+    from rule_viewer.api.pipeline import _dbos_enabled
+
+    if _dbos_enabled():
+        from code_ruler.db.models import PipelineJob
+
+        jobs = db.query(PipelineJob).order_by(PipelineJob.created_at.desc()).all()
+        return [
+            JobStatusResponse(
+                job_id=pj.id,
+                kind=pj.job_type,
+                status=pj.status,
+                logs=[],
+                events=[],
+                repo_url=pj.repo_url,
+                started_at=pj.created_at.isoformat(),
+                finished_at=pj.finished_at.isoformat() if pj.finished_at else None,
+                error=pj.error_message,
+                workflow_id=pj.workflow_id,
+            )
+            for pj in jobs
+        ]
+
     return [JobStatusResponse(**j.model_dump()) for j in get_all_jobs()]
+
+
+@router.post("/pipeline/quick-fetch-prs", response_model=JobStartResponse)
+def start_quick_fetch_prs(req: QuickFetchRequest) -> JobStartResponse:
+    """Start a quick-fetch job: extract a small batch of PRs."""
+    job_id = start_quick_fetch_prs_job(req.repo_url, limit=req.limit)
+    return JobStartResponse(job_id=job_id)
+
+
+@router.post("/pipeline/quick-extract-rules", response_model=JobStartResponse)
+def start_quick_extract_rules(req: QuickExtractRequest) -> JobStartResponse:
+    """Start a quick-extract job: extract rules from a small batch of comments."""
+    job_id = start_quick_extract_rules_job(limit=req.limit, repo_filter=req.repo_filter)
+    return JobStartResponse(job_id=job_id)
 
 
 @router.post("/pipeline/quick-run", response_model=JobStartResponse)
@@ -269,6 +383,79 @@ def start_quick_run(req: QuickRunRequest) -> JobStartResponse:
     """Start a quick run: extract PRs then extract rules in one go."""
     job_id = start_quick_run_job(req.repo_url, pr_limit=req.pr_limit)
     return JobStartResponse(job_id=job_id)
+
+
+@router.post("/pipeline/jobs/{job_id}/resume", response_model=JobStartResponse)
+def resume_job(job_id: str, db: Session = Depends(get_db)) -> JobStartResponse:
+    """Resume a failed or interrupted DBOS workflow."""
+    from rule_viewer.api.pipeline import _dbos_enabled
+
+    if not _dbos_enabled():
+        raise HTTPException(status_code=400, detail="DBOS not enabled; cannot resume jobs")
+
+    from dbos import DBOS
+
+    from code_ruler.db.models import PipelineJob
+
+    pj = db.get(PipelineJob, job_id)
+    if not pj:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not pj.workflow_id:
+        raise HTTPException(status_code=400, detail="Job has no associated workflow")
+
+    handle = DBOS.retrieve_workflow(pj.workflow_id)
+    handle.get_result()
+    return JobStartResponse(job_id=job_id)
+
+
+@router.post("/pipeline/jobs/{job_id}/cancel")
+def cancel_job(job_id: str, db: Session = Depends(get_db)) -> dict:
+    """Cancel a running DBOS workflow.
+
+    Sets the workflow status to CANCELLED in DBOS, which preempts execution
+    at the beginning of the next step. Also updates the PipelineJob row.
+    """
+    from rule_viewer.api.pipeline import _dbos_enabled
+
+    from code_ruler.db.models import PipelineJob
+
+    pj = db.get(PipelineJob, job_id)
+    if not pj:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if _dbos_enabled() and pj.workflow_id:
+        from dbos import DBOS
+        DBOS.cancel_workflow(pj.workflow_id)
+
+    from datetime import datetime, timezone
+    pj.status = "cancelled"
+    pj.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"status": "cancelled", "job_id": job_id}
+
+
+@router.get("/pipeline/jobs/{job_id}/steps")
+def get_job_steps(job_id: str, db: Session = Depends(get_db)) -> list[dict]:
+    """Get step-level progress for a pipeline job."""
+    from code_ruler.db.models import PipelineEvent
+
+    events = (
+        db.query(PipelineEvent)
+        .filter_by(job_id=job_id)
+        .order_by(PipelineEvent.created_at)
+        .all()
+    )
+    if not events:
+        raise HTTPException(status_code=404, detail="No steps found for this job")
+    return [
+        {
+            "id": e.id,
+            "event_type": e.event_type,
+            "data": e.event_data_json or {},
+            "created_at": e.created_at.isoformat(),
+        }
+        for e in events
+    ]
 
 
 @router.get("/pipeline/repo-stats", response_model=list[RepoStatsResponse])

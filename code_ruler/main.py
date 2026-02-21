@@ -9,9 +9,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from code_ruler.db.base import get_engine, get_session_factory, init_db
-from code_ruler.llm.client import DEFAULT_MODEL, get_client, init_llm_obs
-from code_ruler.pipeline import run_pipeline
+from code_ruler.db.base import get_engine, get_session_factory, init_db  # noqa: E402
+from code_ruler.llm.client import DEFAULT_MODEL, get_client, init_llm_obs  # noqa: E402
+from code_ruler.pipeline import run_pipeline  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> None:

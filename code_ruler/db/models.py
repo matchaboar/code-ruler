@@ -30,6 +30,9 @@ class Rule(Base):
     function_type_rule: Mapped[FunctionTypeRule | None] = relationship(
         back_populates="rule", uselist=False
     )
+    enforcer_script: Mapped[EnforcerScript | None] = relationship(
+        back_populates="rule", uselist=False
+    )
     provenance: Mapped[list[RuleProvenance]] = relationship(back_populates="rule")
 
 
@@ -46,6 +49,26 @@ class FunctionTypeRule(Base):
     rule: Mapped[Rule] = relationship(back_populates="function_type_rule")
 
 
+class EnforcerScript(Base):
+    __tablename__ = "enforcer_scripts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rule_id: Mapped[int] = mapped_column(ForeignKey("rules.id"), unique=True, nullable=False)
+    enforcer_source: Mapped[str] = mapped_column(Text, nullable=False)
+    check_type: Mapped[str] = mapped_column(String(20), nullable=False)  # "module" or "function"
+    decorator_source: Mapped[str | None] = mapped_column(Text, nullable=True)
+    test_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    test_result: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    test_output: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    dd_traces: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    rule: Mapped[Rule] = relationship(back_populates="enforcer_script")
+
+
 class RuleProvenance(Base):
     __tablename__ = "rule_provenance"
 
@@ -59,3 +82,40 @@ class RuleProvenance(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     rule: Mapped[Rule] = relationship(back_populates="provenance")
+
+
+class PipelineJob(Base):
+    """Persisted record of a pipeline job (extract-prs, extract-rules, quick-run)."""
+
+    __tablename__ = "pipeline_jobs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workflow_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    job_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="running")
+    repo_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    params_json: Mapped[str | None] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    events: Mapped[list[PipelineEvent]] = relationship(
+        back_populates="job", order_by="PipelineEvent.created_at"
+    )
+
+
+class PipelineEvent(Base):
+    """Persisted event emitted by a pipeline workflow step."""
+
+    __tablename__ = "pipeline_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(
+        ForeignKey("pipeline_jobs.id"), nullable=False, index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    event_data_json: Mapped[str | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    job: Mapped[PipelineJob] = relationship(back_populates="events")

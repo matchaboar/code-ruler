@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from github_extractor.commit_linker import compute_fix_commit_sha
-from github_extractor.models import PRCommit, ReviewComment
+from github_extractor.models import ReviewComment
 
 
 def test_fix_commit_found_by_original(session, sample_review_comment, sample_commits):

@@ -9,9 +9,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from github_extractor.client import create_github_client
-from github_extractor.database import get_engine, get_session_factory, init_db
-from github_extractor.extractor import extract_repo
+from github_extractor.client import create_github_client  # noqa: E402
+from github_extractor.database import get_engine, get_session_factory, init_db  # noqa: E402
+from github_extractor.extractor import extract_repo  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> None:

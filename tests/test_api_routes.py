@@ -7,9 +7,9 @@ from datetime import datetime, timezone
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
-from code_ruler.db.models import FunctionTypeRule, Rule, RuleProvenance
+from code_ruler.db.models import Rule, RuleProvenance
 from github_extractor.models import Base, PullRequest, Repository, ReviewComment
 from rule_viewer.api.routes import get_db
 from rule_viewer.main import app

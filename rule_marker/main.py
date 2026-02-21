@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from rule_marker.linter.engine import LintEngine
-from rule_marker.linter.reporter import format_violations
+from rule_marker.linter.engine import LintEngine  # noqa: E402
+from rule_marker.linter.reporter import format_violations  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> None:

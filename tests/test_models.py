@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from github_extractor.models import IssueComment, PRCommit, PullRequest, Repository, ReviewComment
+from github_extractor.models import PRCommit, PullRequest, Repository, ReviewComment
 from code_ruler.db.models import FunctionTypeRule, Rule, RuleProvenance
 from code_ruler.db.repository import create_rule
 

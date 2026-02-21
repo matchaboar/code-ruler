@@ -8,10 +8,9 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from code_ruler.db.models import FunctionTypeRule, Rule, RuleProvenance
+from code_ruler.db.models import Rule
 from github_extractor.models import (
     Base,
-    IssueComment,
     PRCommit,
     PullRequest,
     Repository,
@@ -25,7 +24,6 @@ def engine():
     eng = create_engine("sqlite:///:memory:", echo=False)
     Base.metadata.create_all(eng)
     # Also create code_ruler tables (they share the same Base)
-    from code_ruler.db.models import Rule  # noqa: F811
 
     Base.metadata.create_all(eng)
     return eng

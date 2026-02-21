@@ -12,7 +12,16 @@
       "Bash(uv run pytest:*)",
       "Bash(uv run code-ruler extract-rules:*)",
       "Bash(tee:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "WebFetch(domain:docs.dbos.dev)",
+      "WebFetch(domain:platform.minimax.io)",
+      "Bash(docker compose:*)",
+      "Bash(podman compose:*)",
+      "Bash(podman run:*)",
+      "Bash(podman ps:*)",
+      "Bash(uv run ruff check:*)"
     ]
   }
 }
