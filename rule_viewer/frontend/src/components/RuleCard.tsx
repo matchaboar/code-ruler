@@ -7,7 +7,7 @@ interface RuleCardProps {
 
 const cardStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "2fr 1fr 100px 100px 80px 60px",
+  gridTemplateColumns: "2fr 1fr 100px 100px 80px 60px 30px",
   alignItems: "center",
   gap: "12px",
   padding: "14px 20px",
@@ -99,6 +99,9 @@ export function RuleCard({ rule }: RuleCardProps) {
       </div>
       <div style={{ fontSize: "13px", color: "#64748b" }}>
         {rule.has_decorator ? "Fn" : ""}
+      </div>
+      <div style={{ fontSize: "13px", color: rule.has_enforcer ? "#3b82f6" : "#e2e8f0" }} title={rule.has_enforcer ? "Has enforcer" : ""}>
+        {rule.has_enforcer ? "E" : ""}
       </div>
     </div>
   );

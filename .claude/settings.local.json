@@ -21,7 +21,9 @@
       "Bash(podman compose:*)",
       "Bash(podman run:*)",
       "Bash(podman ps:*)",
-      "Bash(uv run ruff check:*)"
+      "Bash(uv run ruff check:*)",
+      "WebFetch(domain:docs.testsprite.com)",
+      "WebFetch(domain:www.testsprite.com)"
     ]
   }
 }

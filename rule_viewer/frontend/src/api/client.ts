@@ -7,6 +7,7 @@ export interface RuleListItem {
   title: string;
   is_active: boolean;
   has_decorator: boolean;
+  has_enforcer: boolean;
   provenance_count: number;
 }
 
@@ -192,4 +193,81 @@ export function fetchJobs(): Promise<JobStatus[]> {
 
 export function fetchRepoStats(): Promise<RepoStats[]> {
   return apiFetch<RepoStats[]>("/api/pipeline/repo-stats");
+}
+
+// ---- Enforcer types and helpers ----
+
+export interface EnforcerListItem {
+  rule_slug: string;
+  rule_title: string;
+  category: string;
+  severity: string;
+  status: string;
+  check_type: string;
+  has_decorator: boolean;
+  attempt_count: number;
+  created_at: string;
+}
+
+export interface EnforcerDetail {
+  rule_slug: string;
+  rule_title: string;
+  category: string;
+  severity: string;
+  status: string;
+  check_type: string;
+  has_decorator: boolean;
+  attempt_count: number;
+  enforcer_source: string;
+  decorator_source: string | null;
+  test_code: string | null;
+  test_result: string;
+  test_output: string | null;
+  diff: string | null;
+  dd_traces: Record<string, any>[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function fetchEnforcers(): Promise<EnforcerListItem[]> {
+  return apiFetch<EnforcerListItem[]>("/api/enforcers");
+}
+
+export function fetchEnforcer(slug: string): Promise<EnforcerDetail> {
+  return apiFetch<EnforcerDetail>(
+    `/api/rules/${encodeURIComponent(slug)}/enforcer`
+  );
+}
+
+export function generateEnforcer(slug: string): Promise<JobStartResponse> {
+  return apiPost<JobStartResponse>(
+    `/api/rules/${encodeURIComponent(slug)}/generate-enforcer`,
+    {}
+  );
+}
+
+// ---- Video generation ----
+
+export interface VideoResponse {
+  task_id: string;
+  status: string;
+  file_id: string | null;
+  download_url: string | null;
+  error: string | null;
+}
+
+export function generateVideo(
+  slug: string,
+  prompt?: string
+): Promise<VideoResponse> {
+  return apiPost<VideoResponse>(
+    `/api/rules/${encodeURIComponent(slug)}/generate-video`,
+    { prompt: prompt ?? null }
+  );
+}
+
+export function fetchVideoStatus(taskId: string): Promise<VideoResponse> {
+  return apiFetch<VideoResponse>(
+    `/api/video/${encodeURIComponent(taskId)}`
+  );
 }

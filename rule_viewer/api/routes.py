@@ -24,6 +24,8 @@ from rule_viewer.api.pipeline import (
 )
 from rule_viewer.api.schemas import (
     CredentialsStatusResponse,
+    EnforcerDetail,
+    EnforcerListItem,
     ExtractPRsRequest,
     ExtractRulesRequest,
     GenerateVideoRequest,
@@ -83,6 +85,9 @@ def list_rules(
         has_decorator = (
             db.query(FunctionTypeRule).filter_by(rule_id=rule.id).first() is not None
         )
+        has_enforcer = (
+            db.query(EnforcerScript).filter_by(rule_id=rule.id).first() is not None
+        )
         items.append(
             RuleListItem(
                 slug=rule.slug,
@@ -91,6 +96,7 @@ def list_rules(
                 title=rule.title,
                 is_active=rule.is_active,
                 has_decorator=has_decorator,
+                has_enforcer=has_enforcer,
                 provenance_count=provenance_count,
             )
         )
@@ -168,19 +174,110 @@ def get_provenance(slug: str, db: Session = Depends(get_db)) -> list[ProvenanceI
     return items
 
 
+@router.post("/rules/{slug}/generate-enforcer", response_model=JobStartResponse)
+def generate_enforcer(slug: str, db: Session = Depends(get_db)) -> JobStartResponse:
+    """Trigger enforcer generation for a rule."""
+    rule = db.query(Rule).filter_by(slug=slug).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    if not rule.negative_example:
+        raise HTTPException(status_code=400, detail="Rule has no negative_example; cannot generate enforcer")
+
+    # Check for in-progress generation
+    from rule_viewer.api.pipeline import get_all_jobs as _get_all_jobs
+    for job in _get_all_jobs():
+        if job.kind == "generate-enforcer" and job.status == "running":
+            for ev in job.events:
+                if ev.data.get("rule_slug") == slug:
+                    raise HTTPException(status_code=409, detail="Enforcer generation already in progress")
+
+    job_id = start_generate_enforcer_job(slug)
+    return JobStartResponse(job_id=job_id)
+
+
+@router.get("/enforcers", response_model=list[EnforcerListItem])
+def list_enforcers(db: Session = Depends(get_db)) -> list[EnforcerListItem]:
+    """List all rules with enforcer scripts."""
+    enforcers = db.query(EnforcerScript).all()
+    items = []
+    for es in enforcers:
+        rule = db.get(Rule, es.rule_id)
+        if not rule:
+            continue
+        items.append(
+            EnforcerListItem(
+                rule_slug=rule.slug,
+                rule_title=rule.title,
+                category=rule.category,
+                severity=rule.severity,
+                status=es.status,
+                check_type=es.check_type,
+                has_decorator=es.decorator_source is not None,
+                attempt_count=es.attempt_count,
+                created_at=es.created_at.isoformat(),
+            )
+        )
+    return items
+
+
+def _generate_diff(enforcer_source: str, rule_slug: str) -> str:
+    """Generate a unified diff showing the enforcer script as a new file."""
+    lines = enforcer_source.splitlines()
+    diff_lines = [
+        f"--- /dev/null",
+        f"+++ b/enforcers/{rule_slug}_check.py",
+        f"@@ -0,0 +1,{len(lines)} @@",
+    ]
+    for line in lines:
+        diff_lines.append(f"+{line}")
+    return "\n".join(diff_lines)
+
+
+@router.get("/rules/{slug}/enforcer", response_model=EnforcerDetail)
+def get_enforcer(slug: str, db: Session = Depends(get_db)) -> EnforcerDetail:
+    """Get enforcer detail for a rule."""
+    rule = db.query(Rule).filter_by(slug=slug).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    es = db.query(EnforcerScript).filter_by(rule_id=rule.id).first()
+    if not es:
+        raise HTTPException(status_code=404, detail="No enforcer script for this rule")
+    return EnforcerDetail(
+        rule_slug=rule.slug,
+        rule_title=rule.title,
+        category=rule.category,
+        severity=rule.severity,
+        status=es.status,
+        check_type=es.check_type,
+        has_decorator=es.decorator_source is not None,
+        attempt_count=es.attempt_count,
+        enforcer_source=es.enforcer_source,
+        decorator_source=es.decorator_source,
+        test_code=es.test_code,
+        test_result=es.test_result,
+        test_output=es.test_output,
+        diff=_generate_diff(es.enforcer_source, rule.slug) if es.enforcer_source else None,
+        dd_traces=es.dd_traces if isinstance(es.dd_traces, list) else None,
+        created_at=es.created_at.isoformat(),
+        updated_at=es.updated_at.isoformat(),
+    )
+
+
 @router.post("/rules/{slug}/generate-video", response_model=VideoResponse)
 def generate_video(
     slug: str,
     req: GenerateVideoRequest,
     db: Session = Depends(get_db),
 ) -> VideoResponse:
-    """Generate an animated video from a rule's code examples via Minimax I2V."""
+    """Submit a video generation task for a rule. Returns immediately with a task_id."""
     rule = db.query(Rule).filter_by(slug=slug).first()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
 
     from code_ruler.llm.schemas import CandidateRule
-    from code_ruler.video.generator import generate_rule_video
+    from code_ruler.video.generator import _DEFAULT_PROMPT
+    from code_ruler.video.image_renderer import render_rule_image
+    from code_ruler.video.minimax_client import submit_image_to_video
 
     candidate = CandidateRule(
         slug=rule.slug,
@@ -193,15 +290,42 @@ def generate_video(
         rationale=rule.rationale,
     )
 
-    result = generate_rule_video(candidate, prompt=req.prompt)
+    image_bytes = render_rule_image(candidate)
+    task_id = submit_image_to_video(image_bytes, req.prompt or _DEFAULT_PROMPT)
 
-    return VideoResponse(
-        task_id=result.task_id,
-        status=result.status,
-        file_id=result.file_id,
-        download_url=result.download_url,
-        error=result.error,
-    )
+    return VideoResponse(task_id=task_id, status="Processing")
+
+
+@router.get("/video/{task_id}", response_model=VideoResponse)
+def get_video_status(task_id: str) -> VideoResponse:
+    """Poll Minimax for the status of a video generation task."""
+    from code_ruler.video.minimax_client import get_api_key, get_video_download_url
+
+    import httpx
+
+    api_key = get_api_key()
+    with httpx.Client(timeout=30) as client:
+        resp = client.get(
+            "https://api.minimax.io/v1/query/video_generation",
+            params={"task_id": task_id},
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    status = data.get("status", "")
+    if status == "Success":
+        file_id = data.get("file_id", "")
+        download_url = get_video_download_url(file_id) if file_id else None
+        return VideoResponse(
+            task_id=task_id, status="Success", file_id=file_id, download_url=download_url
+        )
+    elif status == "Fail":
+        return VideoResponse(
+            task_id=task_id, status="Fail", error=data.get("error", "Unknown error")
+        )
+
+    return VideoResponse(task_id=task_id, status="Processing")
 
 
 @router.get("/stats", response_model=StatsResponse)

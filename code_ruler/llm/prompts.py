@@ -81,6 +81,76 @@ Generate the decorator and linter source code. Return JSON with:
 - linter_source: complete Python source for the check() function
 """
 
+ENFORCER_SYSTEM = """\
+You are an expert Python developer generating automated enforcement checks for coding rules.
+
+Given a coding rule, generate a Python function:
+    def check(tree: ast.Module, source: str) -> list[str]
+
+This function receives a parsed AST module and the raw source code. It must return a list of
+violation message strings. An empty list means the code is compliant.
+
+Rules:
+- Use ONLY the stdlib `ast` module for analysis
+- Do NOT import any external packages
+- The function must be self-contained
+- Return clear, actionable violation messages
+- Be precise: only flag actual violations of the described rule
+
+For function_type rules, also generate decorator code that stamps __rule_marker_type__ metadata:
+    def decorator_name(func):
+        func.__rule_marker_type__ = "rule_slug"
+        return func
+
+Return your code inside ```python fences.
+"""
+
+ENFORCER_USER = """\
+## Rule
+Title: {title}
+Description: {description}
+Category: {category}
+
+## Positive Example (correct code)
+```python
+{positive_example}
+```
+
+## Negative Example (violating code)
+```python
+{negative_example}
+```
+
+Generate a `check(tree: ast.Module, source: str) -> list[str]` function that detects violations \
+of this rule. The function should return violations for the negative example and no violations for \
+the positive example.
+
+Return ONLY the Python code inside ```python fences. Do not include imports — `ast` is already available.
+"""
+
+ENFORCER_FIX_USER = """\
+## Rule
+Title: {title}
+Description: {description}
+Category: {category}
+
+## Previous Attempt (failed)
+```python
+{previous_source}
+```
+
+## Error
+{error}
+
+## Negative Example (should trigger violations)
+```python
+{negative_example}
+```
+
+Fix the check function so it correctly detects violations in the negative example. \
+Return ONLY the corrected Python code inside ```python fences.
+"""
+
 DEDUP_SYSTEM = """\
 You are comparing a candidate coding rule against existing rules to detect duplicates.
 

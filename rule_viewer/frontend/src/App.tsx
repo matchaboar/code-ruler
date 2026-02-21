@@ -3,6 +3,7 @@ import { Routes, Route, Link, useLocation } from "react-router-dom";
 import { RuleListPage } from "./pages/RuleListPage";
 import { RuleDetailPage } from "./pages/RuleDetailPage";
 import { PipelinePage } from "./pages/PipelinePage";
+import { EnforcerPage } from "./pages/EnforcerPage";
 import { StatusPage } from "./pages/StatusPage";
 import {
   fetchCredentialsStatus,
@@ -75,11 +76,14 @@ export function App() {
         </Link>
 
         <nav style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "8px" }}>
-          <Link to="/" style={navLinkStyle(isActive("/") && !isActive("/pipeline") && !isActive("/status"))}>
+          <Link to="/" style={navLinkStyle(isActive("/") && !isActive("/pipeline") && !isActive("/enforcers") && !isActive("/status"))}>
             Rules
           </Link>
           <Link to="/pipeline" style={navLinkStyle(isActive("/pipeline"))}>
             Pipeline
+          </Link>
+          <Link to="/enforcers" style={navLinkStyle(isActive("/enforcers"))}>
+            Enforcers
           </Link>
           <Link to="/status" style={navLinkStyle(isActive("/status"))}>
             Status
@@ -112,6 +116,7 @@ export function App() {
           <Route path="/" element={<RuleListPage />} />
           <Route path="/rules/:slug" element={<RuleDetailPage />} />
           <Route path="/pipeline" element={<PipelinePage />} />
+          <Route path="/enforcers" element={<EnforcerPage />} />
           <Route path="/status" element={<StatusPage />} />
         </Routes>
       </main>

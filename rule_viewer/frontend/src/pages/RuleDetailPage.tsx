@@ -1,13 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   fetchRule,
   fetchProvenance,
+  fetchEnforcer,
+  fetchJobStatus,
+  generateEnforcer,
+  generateVideo,
+  fetchVideoStatus,
   type RuleDetail,
   type ProvenanceItem,
+  type EnforcerDetail,
+  type VideoResponse,
 } from "../api/client";
 import { CodeBlock } from "../components/CodeBlock";
 import { ProvenanceCard } from "../components/ProvenanceCard";
+import { TabBar } from "../components/TabBar";
 
 const backStyle: React.CSSProperties = {
   fontSize: "14px",
@@ -160,6 +168,25 @@ export function RuleDetailPage() {
   const [provenance, setProvenance] = useState<ProvenanceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [enforcer, setEnforcer] = useState<EnforcerDetail | null>(null);
+
+  const [enforcerTab, setEnforcerTab] = useState("source");
+  const [generating, setGenerating] = useState(false);
+  const [videoGenerating, setVideoGenerating] = useState(false);
+  const [videoResult, setVideoResult] = useState<VideoResponse | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [videoElapsed, setVideoElapsed] = useState(0);
+  const videoStartRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!videoGenerating) return;
+    const tick = setInterval(() => {
+      if (videoStartRef.current) {
+        setVideoElapsed(Math.floor((Date.now() - videoStartRef.current) / 1000));
+      }
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [videoGenerating]);
 
   useEffect(() => {
     if (!slug) return;
@@ -171,12 +198,50 @@ export function RuleDetailPage() {
       .then(([ruleData, provData]) => {
         setRule(ruleData);
         setProvenance(provData);
+        // Try to load enforcer (may 404)
+        fetchEnforcer(slug).then(setEnforcer).catch(() => setEnforcer(null));
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Failed to load rule");
       })
       .finally(() => setLoading(false));
   }, [slug]);
+
+  const handleGenerateVideo = () => {
+    if (!slug) return;
+    setVideoGenerating(true);
+    setVideoError(null);
+    setVideoResult(null);
+    setVideoElapsed(0);
+    videoStartRef.current = Date.now();
+    generateVideo(slug)
+      .then((res) => {
+        // Poll for completion every 5 seconds
+        const pollId = setInterval(() => {
+          fetchVideoStatus(res.task_id)
+            .then((status) => {
+              if (status.status === "Success") {
+                clearInterval(pollId);
+                setVideoResult(status);
+                setVideoGenerating(false);
+              } else if (status.status === "Fail") {
+                clearInterval(pollId);
+                setVideoError(status.error || "Video generation failed");
+                setVideoGenerating(false);
+              }
+            })
+            .catch(() => {
+              clearInterval(pollId);
+              setVideoError("Failed to check video status");
+              setVideoGenerating(false);
+            });
+        }, 5000);
+      })
+      .catch((err) => {
+        setVideoError(err instanceof Error ? err.message : "Failed to submit");
+        setVideoGenerating(false);
+      });
+  };
 
   if (loading) {
     return <div style={{ textAlign: "center", padding: "48px", color: "#94a3b8" }}>Loading...</div>;
@@ -302,6 +367,214 @@ export function RuleDetailPage() {
           )}
         </div>
       )}
+
+      {/* Enforcer */}
+      <div style={sectionStyle}>
+        <h2 style={sectionTitle}>Enforcer</h2>
+        {enforcer ? (
+          <div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px" }}>
+              <Badge
+                label={enforcer.status}
+                color={enforcer.status === "passed" ? "#22c55e" : enforcer.status === "failed" ? "#ef4444" : "#f59e0b"}
+              />
+              <span style={{ fontSize: "13px", color: "#64748b" }}>
+                {enforcer.check_type} check | {enforcer.attempt_count} attempt(s)
+              </span>
+              <button
+                onClick={() => {
+                  if (!slug) return;
+                  setGenerating(true);
+                  generateEnforcer(slug)
+                    .then((res) => {
+                      const pollId = setInterval(() => {
+                        fetchJobStatus(res.job_id).then((job) => {
+                          if (job.status !== "running") {
+                            clearInterval(pollId);
+                            setGenerating(false);
+                            fetchEnforcer(slug).then(setEnforcer).catch(() => {});
+                          }
+                        });
+                      }, 2000);
+                    })
+                    .catch(() => setGenerating(false));
+                }}
+                disabled={generating}
+                style={{
+                  padding: "4px 12px",
+                  background: "#f59e0b",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: generating ? "not-allowed" : "pointer",
+                  fontSize: "12px",
+                  opacity: generating ? 0.6 : 1,
+                }}
+              >
+                {generating ? "Regenerating..." : "Regenerate"}
+              </button>
+            </div>
+            <TabBar
+              tabs={[
+                { key: "source", label: "Source" },
+                { key: "diff", label: "Diff", disabled: !enforcer.diff },
+                { key: "decorator", label: "Decorator", disabled: !enforcer.decorator_source },
+                { key: "test", label: "Test Output", disabled: !enforcer.test_output },
+              ]}
+              active={enforcerTab}
+              onChange={setEnforcerTab}
+            />
+
+            {enforcerTab === "source" && enforcer.enforcer_source && (
+              <CodeBlock code={enforcer.enforcer_source} language="python" />
+            )}
+
+            {enforcerTab === "diff" && enforcer.diff && (
+              <CodeBlock code={enforcer.diff} language="diff" />
+            )}
+
+            {enforcerTab === "decorator" && enforcer.decorator_source && (
+              <CodeBlock code={enforcer.decorator_source} language="python" />
+            )}
+
+            {enforcerTab === "test" && enforcer.test_output && (
+              <pre style={{ background: "#1e293b", color: "#e2e8f0", padding: "12px", borderRadius: "8px", fontSize: "13px", overflow: "auto", whiteSpace: "pre-wrap" }}>
+                {enforcer.test_output}
+              </pre>
+            )}
+          </div>
+        ) : (
+          <div>
+            {rule.negative_example ? (
+              <button
+                onClick={() => {
+                  if (!slug) return;
+                  setGenerating(true);
+                  generateEnforcer(slug)
+                    .then((res) => {
+                      const pollId = setInterval(() => {
+                        fetchJobStatus(res.job_id).then((job) => {
+                          if (job.status !== "running") {
+                            clearInterval(pollId);
+                            setGenerating(false);
+                            fetchEnforcer(slug).then(setEnforcer).catch(() => {});
+                          }
+                        });
+                      }, 2000);
+                    })
+                    .catch(() => setGenerating(false));
+                }}
+                disabled={generating}
+                style={{
+                  padding: "8px 20px",
+                  background: generating ? "#94a3b8" : "#3b82f6",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: generating ? "not-allowed" : "pointer",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                }}
+              >
+                {generating ? "Generating..." : "Add Enforcer"}
+              </button>
+            ) : (
+              <div style={{ color: "#94a3b8", fontSize: "14px" }}>
+                This rule has no negative example, so an enforcer cannot be generated.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Video */}
+      <div style={sectionStyle}>
+        <h2 style={sectionTitle}>Video</h2>
+        {videoResult?.status === "Success" && videoResult.download_url ? (
+          <div>
+            <video
+              controls
+              style={{
+                width: "100%",
+                maxWidth: "720px",
+                borderRadius: "8px",
+                background: "#000",
+              }}
+              src={videoResult.download_url}
+            />
+            <div style={{ marginTop: "8px", display: "flex", gap: "8px", alignItems: "center" }}>
+              <Badge label="Ready" color="#22c55e" />
+              {videoElapsed > 0 && (
+                <span style={{ fontSize: "13px", color: "#64748b" }}>
+                  Generated in {Math.floor(videoElapsed / 60)}:{String(videoElapsed % 60).padStart(2, "0")}
+                </span>
+              )}
+              <button
+                onClick={() => handleGenerateVideo()}
+                disabled={videoGenerating}
+                style={{
+                  padding: "4px 12px",
+                  background: "#f59e0b",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: videoGenerating ? "not-allowed" : "pointer",
+                  fontSize: "12px",
+                  opacity: videoGenerating ? 0.6 : 1,
+                }}
+              >
+                {videoGenerating ? "Regenerating..." : "Regenerate"}
+              </button>
+            </div>
+          </div>
+        ) : videoGenerating ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              style={{
+                width: "20px",
+                height: "20px",
+                border: "3px solid #e2e8f0",
+                borderTop: "3px solid #3b82f6",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite",
+              }}
+            />
+            <span style={{ color: "#64748b", fontSize: "14px" }}>
+              Generating video... {Math.floor(videoElapsed / 60)}:{String(videoElapsed % 60).padStart(2, "0")}
+            </span>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        ) : (
+          <div>
+            {videoError && (
+              <div style={{ color: "#ef4444", fontSize: "14px", marginBottom: "8px" }}>
+                {videoError}
+              </div>
+            )}
+            {(rule.positive_example || rule.negative_example) ? (
+              <button
+                onClick={() => handleGenerateVideo()}
+                style={{
+                  padding: "8px 20px",
+                  background: "#8b5cf6",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                }}
+              >
+                Generate Video
+              </button>
+            ) : (
+              <div style={{ color: "#94a3b8", fontSize: "14px" }}>
+                This rule has no code examples, so a video cannot be generated.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Provenance */}
       <div style={sectionStyle}>

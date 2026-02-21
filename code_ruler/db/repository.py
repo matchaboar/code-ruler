@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from code_ruler.db.models import FunctionTypeRule, Rule, RuleProvenance
+from code_ruler.db.models import EnforcerScript, FunctionTypeRule, Rule, RuleProvenance
 
 
 def get_all_rules(session: Session, active_only: bool = False) -> list[Rule]:
@@ -107,6 +107,75 @@ def create_provenance(
     session.add(prov)
     session.flush()
     return prov
+
+
+def create_enforcer_script(
+    session: Session,
+    *,
+    rule_id: int,
+    enforcer_source: str,
+    check_type: str,
+    decorator_source: str | None = None,
+    test_code: str | None = None,
+    test_result: str = "pending",
+    test_output: str | None = None,
+    attempt_count: int = 0,
+    status: str = "pending",
+    dd_traces: dict | None = None,
+) -> EnforcerScript:
+    """Create or replace an enforcer script for a rule."""
+    now = datetime.now(timezone.utc)
+    existing = session.query(EnforcerScript).filter_by(rule_id=rule_id).first()
+    if existing:
+        existing.enforcer_source = enforcer_source
+        existing.check_type = check_type
+        existing.decorator_source = decorator_source
+        existing.test_code = test_code
+        existing.test_result = test_result
+        existing.test_output = test_output
+        existing.attempt_count = attempt_count
+        existing.status = status
+        existing.dd_traces = dd_traces
+        existing.updated_at = now
+        session.flush()
+        return existing
+    es = EnforcerScript(
+        rule_id=rule_id,
+        enforcer_source=enforcer_source,
+        check_type=check_type,
+        decorator_source=decorator_source,
+        test_code=test_code,
+        test_result=test_result,
+        test_output=test_output,
+        attempt_count=attempt_count,
+        status=status,
+        dd_traces=dd_traces,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(es)
+    session.flush()
+    return es
+
+
+def get_enforcer_by_rule_id(session: Session, rule_id: int) -> EnforcerScript | None:
+    """Get an enforcer script by rule ID."""
+    return session.query(EnforcerScript).filter_by(rule_id=rule_id).first()
+
+
+def get_all_enforcers(session: Session) -> list[EnforcerScript]:
+    """Get all enforcer scripts."""
+    return session.query(EnforcerScript).all()
+
+
+def update_enforcer_script(session: Session, enforcer: EnforcerScript, **kwargs: object) -> EnforcerScript:
+    """Update an enforcer script's fields."""
+    for key, value in kwargs.items():
+        if hasattr(enforcer, key):
+            setattr(enforcer, key, value)
+    enforcer.updated_at = datetime.now(timezone.utc)
+    session.flush()
+    return enforcer
 
 
 def update_rule(session: Session, rule: Rule, **kwargs: object) -> Rule:
