@@ -1,5 +1,11 @@
 # Code Ruler
 
+## `TO RUN, USE ./start.sh`
+
+<a href="https://youtu.be/B43seaULG2o">
+  <img src="https://img.youtube.com/vi/B43seaULG2o/maxresdefault.jpg" alt="Code Ruler Demo Video" width="600">
+</a>
+
 ![Code Ruler](image.png)
 
 AI-powered system that automatically extracts coding rules from GitHub PR review comments, then generates enforcement scripts and tests for those rules.
