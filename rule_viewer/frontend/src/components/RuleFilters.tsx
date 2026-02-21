@@ -1,10 +1,12 @@
 import type { RuleListParams } from "../api/client";
 
+type FilterParams = Omit<RuleListParams, "repoId">;
+
 interface RuleFiltersProps {
-  filters: RuleListParams;
+  filters: FilterParams;
   categories: string[];
   severities: string[];
-  onFilterChange: (filters: RuleListParams) => void;
+  onFilterChange: (filters: FilterParams) => void;
 }
 
 const barStyle: React.CSSProperties = {

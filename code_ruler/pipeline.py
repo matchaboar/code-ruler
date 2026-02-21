@@ -103,8 +103,8 @@ def run_pipeline(
                 })
                 continue
 
-            # Phase 3: Deduplication
-            existing = get_all_rules(session)
+            # Phase 3: Deduplication (per-repo)
+            existing = get_all_rules(session, repo_id=context.repo_id)
             decision = check_duplicate(client, candidate, existing, model)
 
             if decision.action == "discard":
@@ -155,6 +155,7 @@ def _store_rule(
     rule = create_rule(
         session,
         slug=candidate.slug,
+        repo_id=context.repo_id,
         category=candidate.category,
         severity=candidate.severity,
         title=candidate.title,

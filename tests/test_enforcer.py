@@ -24,7 +24,7 @@ from code_ruler.enforcer.generator import (
     _test_enforcer,
     generate_enforcer,
 )
-from github_extractor.models import Base
+from github_extractor.models import Base, Repository
 
 
 @pytest.fixture
@@ -44,11 +44,24 @@ def db_session():
 
 
 @pytest.fixture
-def sample_rule(db_session):
+def sample_repo(db_session):
+    """Create a sample repository."""
+    repo = Repository(
+        owner="test", name="repo", full_name="test/repo",
+        url="https://github.com/test/repo",
+    )
+    db_session.add(repo)
+    db_session.flush()
+    return repo
+
+
+@pytest.fixture
+def sample_rule(db_session, sample_repo):
     """Create a sample rule with negative_example."""
     now = datetime.now(timezone.utc)
     rule = Rule(
         slug="no-bare-except",
+        repo_id=sample_repo.id,
         category="lint",
         severity="warning",
         title="Do not use bare except clauses",
@@ -67,11 +80,12 @@ def sample_rule(db_session):
 
 
 @pytest.fixture
-def function_type_rule(db_session):
+def function_type_rule(db_session, sample_repo):
     """Create a function_type rule with existing linter_source."""
     now = datetime.now(timezone.utc)
     rule = Rule(
         slug="pure-function-check",
+        repo_id=sample_repo.id,
         category="function_type",
         severity="error",
         title="Pure function must not have side effects",
@@ -335,8 +349,16 @@ def api_client():
     session = factory()
 
     now = datetime.now(timezone.utc)
+    repo = Repository(
+        owner="test", name="repo", full_name="test/repo",
+        url="https://github.com/test/repo",
+    )
+    session.add(repo)
+    session.flush()
+
     rule = Rule(
         slug="no-bare-except",
+        repo_id=repo.id,
         category="lint",
         severity="warning",
         title="No bare except",
@@ -416,7 +438,7 @@ def test_generate_enforcer_no_negative_example(api_client):
 
 def test_rules_list_includes_has_enforcer(api_client):
     """Test that rules list includes has_enforcer field."""
-    response = api_client.get("/api/rules")
+    response = api_client.get("/api/rules?repo_id=1")
     assert response.status_code == 200
     data = response.json()
     assert len(data) >= 1

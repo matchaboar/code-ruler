@@ -1,0 +1,52 @@
+[
+  {
+    "id": "TC001",
+    "title": "get all repositories with rule counts",
+    "description": "Test the GET /api/repos endpoint to ensure it returns a 200 status with a list of repositories including their metadata and rule counts. Verify behavior when no repositories are tracked and when the server encounters an internal error."
+  },
+  {
+    "id": "TC002",
+    "title": "list rules with filters and search",
+    "description": "Test the GET /api/rules endpoint with required repo_id and optional filters category, severity, is_active, and search. Verify it returns 200 with filtered RuleListItem[]. Also test 400 response when repo_id is missing."
+  },
+  {
+    "id": "TC003",
+    "title": "get single rule detail by slug",
+    "description": "Test the GET /api/rules/{slug} endpoint to retrieve full rule details including decorator and linter source. Verify 200 response for existing rules and 404 for nonexistent slugs."
+  },
+  {
+    "id": "TC004",
+    "title": "get rule provenance information",
+    "description": "Test the GET /api/rules/{slug}/provenance endpoint to retrieve provenance data including PR references, authors, diffs, and file paths. Verify 200 for existing rules and 404 for nonexistent rules."
+  },
+  {
+    "id": "TC005",
+    "title": "trigger enforcer generation for rule",
+    "description": "Test the POST /api/rules/{slug}/generate-enforcer endpoint to start enforcer generation. Verify 200 with job_id on success, 400 if rule lacks negative_example, 409 if generation already in progress, and 404 if rule not found."
+  },
+  {
+    "id": "TC006",
+    "title": "list enforcers optionally by repo",
+    "description": "Test the GET /api/enforcers endpoint to list all enforcer scripts, optionally filtered by repo_id. Verify 200 response with EnforcerListItem[]."
+  },
+  {
+    "id": "TC007",
+    "title": "get enforcer detail for rule",
+    "description": "Test the GET /api/rules/{slug}/enforcer endpoint to retrieve enforcer details including source, tests, and traces. Verify 200 for existing enforcers and 404 if rule or enforcer not found."
+  },
+  {
+    "id": "TC008",
+    "title": "submit video generation task for rule",
+    "description": "Test the POST /api/rules/{slug}/generate-video endpoint to submit a video generation request with optional prompt. Verify 200 with task_id on success and 404 if rule not found."
+  },
+  {
+    "id": "TC009",
+    "title": "poll video generation task status",
+    "description": "Test the GET /api/video/{task_id} endpoint to poll the status of a video generation task. Verify 200 with status 'processing', 'completed' with video URL, or 'failed' with error details."
+  },
+  {
+    "id": "TC010",
+    "title": "check external service credentials status",
+    "description": "Test the GET /api/credentials/status endpoint to verify connectivity status for AWS Bedrock, Datadog, and GitHub integrations. Verify 200 with success or partial failure statuses and 500 on subsystem errors."
+  }
+]

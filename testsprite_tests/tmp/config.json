@@ -1,0 +1,17 @@
+{
+  "status": "init",
+  "scope": "codebase",
+  "type": "backend",
+  "localEndpoint": "http://localhost:8000/",
+  "serverPort": 39239,
+  "executionArgs": {
+    "projectName": "code-ruler",
+    "projectPath": "/home/boarcoder/documents/github/code-ruler",
+    "testIds": [],
+    "additionalInstruction": "This is a Python 3.11 FastAPI backend project. Use pytest with FastAPI TestClient. The project uses uv (not pip) for package management - run tests with 'uv run pytest'. The database uses SQLAlchemy with SQLite. Mock external services (AWS Bedrock, Datadog, GitHub API, Minimax API) - do not make real API calls. The app is in rule_viewer/main.py with the FastAPI app object. Use the existing test fixtures in tests/conftest.py if applicable. Write comprehensive tests targeting 100% coverage of all API endpoints in rule_viewer/api/routes.py. Do NOT open a browser or Chrome.",
+    "envs": {
+      "API_KEY": "sk-user-6PHZo5fzYjKqux6-TVJc4zlMqz8bUYy-sJNzODuNrbAlsTOpfsHch01iBE5J5YLsv8eR_H_gpx1bNKy885dYFFnXs-p0dtkBGQAP3H74y6dG8zVaIclaSzNVplq_sLEz5lM"
+    }
+  },
+  "proxy": "http://b507aa62-bd1c-4e22-b495-65967cecab6f:oYx6e16b5kGPh84qFCXMwNaCqDx23EEc@tun.testsprite.com:8080"
+}

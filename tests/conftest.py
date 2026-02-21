@@ -139,11 +139,12 @@ def sample_review_comment(session: Session, sample_pr: PullRequest) -> ReviewCom
 
 
 @pytest.fixture
-def sample_rule(session: Session) -> Rule:
+def sample_rule(session: Session, sample_repo: Repository) -> Rule:
     """Create a sample rule."""
     now = datetime.now(timezone.utc)
     rule = Rule(
         slug="no-bare-except",
+        repo_id=sample_repo.id,
         category="lint",
         severity="warning",
         title="Do not use bare except clauses",

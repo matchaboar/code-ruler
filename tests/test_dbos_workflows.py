@@ -305,7 +305,7 @@ class TestWorkflowSteps:
             "repo_name": "o/r", "pr_number": 1, "pr_title": "Fix",
             "pr_author": "dev", "comment_author": "rev",
             "comment_body": "Use typing", "file_path": "a.py",
-            "diff_hunk": "@@ hunk @@", "pr_id": 1, "review_comment_id": 1,
+            "diff_hunk": "@@ hunk @@", "pr_id": 1, "review_comment_id": 1, "repo_id": 1,
         }
 
         with patch("code_ruler.llm.client.get_client") as mock_gc, \
@@ -374,6 +374,7 @@ class TestWorkflowSteps:
             )
             session.add(comment)
             session.commit()
+            repo_id = repo.id
             pr_id = pr.id
             comment_id = comment.id
 
@@ -384,7 +385,7 @@ class TestWorkflowSteps:
             "title": "Test Rule", "description": "desc",
             "rationale": "reason",
         }
-        ctx = {"pr_id": pr_id, "review_comment_id": comment_id}
+        ctx = {"pr_id": pr_id, "review_comment_id": comment_id, "repo_id": repo_id}
 
         result = store_rule_step.__wrapped__(db_path, candidate, ctx)
         assert result["slug"] == "test-rule"

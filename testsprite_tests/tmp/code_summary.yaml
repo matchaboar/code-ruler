@@ -1,0 +1,278 @@
+version: "2"
+type: backend
+tech_stack:
+  - Python 3.11
+  - FastAPI
+  - SQLite (SQLAlchemy ORM)
+  - Pydantic
+  - Anthropic Claude (Bedrock)
+  - DBOS (durable workflows)
+  - Datadog (ddtrace)
+  - httpx
+features:
+  - name: Repository Management
+    description: List repositories with rule counts
+    files:
+      - rule_viewer/api/routes.py
+      - rule_viewer/api/schemas.py
+    endpoints:
+      - method: GET
+        path: /api/repos
+        description: List all repositories with rule counts
+        auth_required: false
+        response_schema:
+          "200": RepoItem[]
+    depends_on: []
+
+  - name: Rule Management
+    description: CRUD operations for coding rules with filtering, search, and detail views
+    files:
+      - rule_viewer/api/routes.py
+      - rule_viewer/api/schemas.py
+      - code_ruler/db/models.py
+    endpoints:
+      - method: GET
+        path: /api/rules
+        description: List rules with optional filters (category, severity, active, search) scoped to a repository
+        auth_required: false
+        request_schema:
+          query:
+            repo_id: integer (required)
+            category: string (optional)
+            severity: string (optional)
+            is_active: boolean (optional)
+            search: string (optional)
+        response_schema:
+          "200": RuleListItem[]
+      - method: GET
+        path: /api/rules/{slug}
+        description: Get a single rule with full detail including decorator and linter source
+        auth_required: false
+        request_schema:
+          query:
+            repo_id: integer (optional)
+        response_schema:
+          "200": RuleDetail
+          "404": Rule not found
+    depends_on:
+      - Repository Management
+
+  - name: Rule Provenance
+    description: Get provenance data for a rule showing PR references that generated it
+    files:
+      - rule_viewer/api/routes.py
+      - rule_viewer/api/schemas.py
+      - code_ruler/db/models.py
+    endpoints:
+      - method: GET
+        path: /api/rules/{slug}/provenance
+        description: Get provenance for a rule - PR references that generated it
+        auth_required: false
+        response_schema:
+          "200": ProvenanceItem[]
+          "404": Rule not found
+    depends_on:
+      - Rule Management
+
+  - name: Enforcer Management
+    description: Generate and manage enforcer scripts (linter checks) for rules
+    files:
+      - rule_viewer/api/routes.py
+      - rule_viewer/api/schemas.py
+      - code_ruler/enforcer/generator.py
+      - code_ruler/db/models.py
+    endpoints:
+      - method: POST
+        path: /api/rules/{slug}/generate-enforcer
+        description: Trigger enforcer generation for a rule
+        auth_required: false
+        response_schema:
+          "200": JobStartResponse
+          "400": Rule has no negative_example
+          "404": Rule not found
+          "409": Enforcer generation already in progress
+      - method: GET
+        path: /api/enforcers
+        description: List all rules with enforcer scripts, optionally scoped to a repo
+        auth_required: false
+        request_schema:
+          query:
+            repo_id: integer (optional)
+        response_schema:
+          "200": EnforcerListItem[]
+      - method: GET
+        path: /api/rules/{slug}/enforcer
+        description: Get enforcer detail for a rule
+        auth_required: false
+        response_schema:
+          "200": EnforcerDetail
+          "404": Rule or enforcer not found
+    depends_on:
+      - Rule Management
+
+  - name: Video Generation
+    description: Generate animated video previews for rules using Minimax API
+    files:
+      - rule_viewer/api/routes.py
+      - rule_viewer/api/schemas.py
+      - code_ruler/video/generator.py
+      - code_ruler/video/image_renderer.py
+      - code_ruler/video/minimax_client.py
+    endpoints:
+      - method: POST
+        path: /api/rules/{slug}/generate-video
+        description: Submit a video generation task for a rule
+        auth_required: false
+        request_schema:
+          body:
+            prompt: string (optional)
+        response_schema:
+          "200": VideoResponse
+          "404": Rule not found
+      - method: GET
+        path: /api/video/{task_id}
+        description: Poll Minimax for the status of a video generation task
+        auth_required: false
+        response_schema:
+          "200": VideoResponse
+    depends_on:
+      - Rule Management
+
+  - name: Statistics
+    description: Get summary statistics about rules and PRs
+    files:
+      - rule_viewer/api/routes.py
+      - rule_viewer/api/schemas.py
+    endpoints:
+      - method: GET
+        path: /api/stats
+        description: Get summary statistics, optionally scoped to a repo
+        auth_required: false
+        request_schema:
+          query:
+            repo_id: integer (optional)
+        response_schema:
+          "200": StatsResponse
+    depends_on:
+      - Rule Management
+
+  - name: Credentials Check
+    description: Check connectivity to external services (AWS Bedrock, Datadog, GitHub)
+    files:
+      - rule_viewer/api/routes.py
+      - rule_viewer/api/schemas.py
+    endpoints:
+      - method: GET
+        path: /api/credentials/status
+        description: Check connectivity to external services
+        auth_required: false
+        response_schema:
+          "200": CredentialsStatusResponse
+    depends_on: []
+
+  - name: Pipeline Jobs
+    description: Start and manage background pipeline jobs for extracting PRs and rules
+    files:
+      - rule_viewer/api/routes.py
+      - rule_viewer/api/schemas.py
+      - rule_viewer/api/pipeline.py
+      - code_ruler/pipeline.py
+      - code_ruler/workflows/rule_extraction.py
+      - code_ruler/workflows/pr_extraction.py
+    endpoints:
+      - method: POST
+        path: /api/pipeline/extract-prs
+        description: Start a background job to extract PRs from a GitHub repo
+        auth_required: false
+        request_schema:
+          body:
+            repo_url: string
+            limit: integer (optional)
+        response_schema:
+          "200": JobStartResponse
+      - method: POST
+        path: /api/pipeline/extract-rules
+        description: Start a background job to extract rules from PR data
+        auth_required: false
+        request_schema:
+          body:
+            limit: integer (optional)
+            dry_run: boolean (optional)
+            repo_full_name: string (optional)
+        response_schema:
+          "200": JobStartResponse
+      - method: GET
+        path: /api/pipeline/jobs/{job_id}
+        description: Get the status and logs of a pipeline job
+        auth_required: false
+        response_schema:
+          "200": JobStatusResponse
+          "404": Job not found
+      - method: GET
+        path: /api/pipeline/jobs
+        description: List all pipeline jobs
+        auth_required: false
+        response_schema:
+          "200": JobStatusResponse[]
+      - method: POST
+        path: /api/pipeline/quick-fetch-prs
+        description: Start a quick-fetch job for a small batch of PRs
+        auth_required: false
+        request_schema:
+          body:
+            repo_url: string
+            limit: integer (optional, default 10)
+        response_schema:
+          "200": JobStartResponse
+      - method: POST
+        path: /api/pipeline/quick-extract-rules
+        description: Start a quick-extract job for rules from a small batch of comments
+        auth_required: false
+        request_schema:
+          body:
+            limit: integer (optional, default 10)
+            repo_filter: string (optional)
+        response_schema:
+          "200": JobStartResponse
+      - method: POST
+        path: /api/pipeline/quick-run
+        description: Start a quick run - extract PRs then extract rules in one go
+        auth_required: false
+        request_schema:
+          body:
+            repo_url: string
+            pr_limit: integer (optional, default 10)
+        response_schema:
+          "200": JobStartResponse
+      - method: POST
+        path: /api/pipeline/jobs/{job_id}/resume
+        description: Resume a failed or interrupted DBOS workflow
+        auth_required: false
+        response_schema:
+          "200": JobStartResponse
+          "400": DBOS not enabled or no workflow
+          "404": Job not found
+      - method: POST
+        path: /api/pipeline/jobs/{job_id}/cancel
+        description: Cancel a running DBOS workflow
+        auth_required: false
+        response_schema:
+          "200": status cancelled
+          "404": Job not found
+      - method: GET
+        path: /api/pipeline/jobs/{job_id}/steps
+        description: Get step-level progress for a pipeline job
+        auth_required: false
+        response_schema:
+          "200": PipelineEvent[]
+          "404": No steps found
+      - method: GET
+        path: /api/pipeline/repo-stats
+        description: Get processed/unprocessed comment counts per repo
+        auth_required: false
+        response_schema:
+          "200": RepoStatsResponse[]
+    depends_on:
+      - Repository Management
+
+known_limitations: []

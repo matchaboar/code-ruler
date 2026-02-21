@@ -1,18 +1,28 @@
 // ---- Types matching backend Pydantic schemas ----
 
+export interface RepoItem {
+  id: number;
+  full_name: string;
+  url: string;
+  total_rules: number;
+}
+
 export interface RuleListItem {
   slug: string;
+  repo_id: number;
   category: string;
   severity: string;
   title: string;
   is_active: boolean;
   has_decorator: boolean;
   has_enforcer: boolean;
+  has_tests: boolean;
   provenance_count: number;
 }
 
 export interface RuleDetail {
   slug: string;
+  repo_id: number;
   category: string;
   severity: string;
   title: string;
@@ -62,26 +72,32 @@ async function apiFetch<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export function fetchRepos(): Promise<RepoItem[]> {
+  return apiFetch<RepoItem[]>("/api/repos");
+}
+
 export interface RuleListParams {
+  repoId: number;
   category?: string;
   severity?: string;
   is_active?: boolean;
   search?: string;
 }
 
-export function fetchRules(params?: RuleListParams): Promise<RuleListItem[]> {
+export function fetchRules(params: RuleListParams): Promise<RuleListItem[]> {
   const qs = new URLSearchParams();
-  if (params?.category) qs.set("category", params.category);
-  if (params?.severity) qs.set("severity", params.severity);
-  if (params?.is_active !== undefined)
+  qs.set("repo_id", String(params.repoId));
+  if (params.category) qs.set("category", params.category);
+  if (params.severity) qs.set("severity", params.severity);
+  if (params.is_active !== undefined)
     qs.set("is_active", String(params.is_active));
-  if (params?.search) qs.set("search", params.search);
-  const query = qs.toString();
-  return apiFetch<RuleListItem[]>(`/api/rules${query ? `?${query}` : ""}`);
+  if (params.search) qs.set("search", params.search);
+  return apiFetch<RuleListItem[]>(`/api/rules?${qs.toString()}`);
 }
 
-export function fetchRule(slug: string): Promise<RuleDetail> {
-  return apiFetch<RuleDetail>(`/api/rules/${encodeURIComponent(slug)}`);
+export function fetchRule(slug: string, repoId?: number): Promise<RuleDetail> {
+  const qs = repoId !== undefined ? `?repo_id=${repoId}` : "";
+  return apiFetch<RuleDetail>(`/api/rules/${encodeURIComponent(slug)}${qs}`);
 }
 
 export function fetchProvenance(slug: string): Promise<ProvenanceItem[]> {
@@ -90,8 +106,9 @@ export function fetchProvenance(slug: string): Promise<ProvenanceItem[]> {
   );
 }
 
-export function fetchStats(): Promise<Stats> {
-  return apiFetch<Stats>("/api/stats");
+export function fetchStats(repoId?: number): Promise<Stats> {
+  const qs = repoId !== undefined ? `?repo_id=${repoId}` : "";
+  return apiFetch<Stats>(`/api/stats${qs}`);
 }
 
 export interface ServiceStatus {
@@ -229,8 +246,9 @@ export interface EnforcerDetail {
   updated_at: string;
 }
 
-export function fetchEnforcers(): Promise<EnforcerListItem[]> {
-  return apiFetch<EnforcerListItem[]>("/api/enforcers");
+export function fetchEnforcers(repoId?: number): Promise<EnforcerListItem[]> {
+  const qs = repoId !== undefined ? `?repo_id=${repoId}` : "";
+  return apiFetch<EnforcerListItem[]>(`/api/enforcers${qs}`);
 }
 
 export function fetchEnforcer(slug: string): Promise<EnforcerDetail> {
@@ -269,5 +287,53 @@ export function generateVideo(
 export function fetchVideoStatus(taskId: string): Promise<VideoResponse> {
   return apiFetch<VideoResponse>(
     `/api/video/${encodeURIComponent(taskId)}`
+  );
+}
+
+// ---- TestSprite types and helpers ----
+
+export interface TestSpriteListItem {
+  id: number;
+  rule_slug: string;
+  rule_title: string;
+  repo_url: string;
+  status: string;
+  created_at: string;
+}
+
+export interface TestSpriteDetail {
+  id: number;
+  rule_slug: string;
+  rule_title: string;
+  repo_url: string;
+  status: string;
+  test_plan: Record<string, any> | null;
+  generated_tests: string | null;
+  test_results: Record<string, any> | null;
+  diff: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function fetchTestSpriteResults(repoId?: number): Promise<TestSpriteListItem[]> {
+  const qs = repoId !== undefined ? `?repo_id=${repoId}` : "";
+  return apiFetch<TestSpriteListItem[]>(`/api/testsprite${qs}`);
+}
+
+export function fetchRuleTestSpriteResults(slug: string): Promise<TestSpriteListItem[]> {
+  return apiFetch<TestSpriteListItem[]>(
+    `/api/rules/${encodeURIComponent(slug)}/testsprite`
+  );
+}
+
+export function fetchTestSpriteDetail(resultId: number): Promise<TestSpriteDetail> {
+  return apiFetch<TestSpriteDetail>(`/api/testsprite/${resultId}`);
+}
+
+export function generateTestSprite(slug: string): Promise<JobStartResponse> {
+  return apiPost<JobStartResponse>(
+    `/api/rules/${encodeURIComponent(slug)}/generate-testsprite`,
+    {}
   );
 }

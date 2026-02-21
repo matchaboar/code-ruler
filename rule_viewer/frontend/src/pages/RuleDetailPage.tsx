@@ -8,10 +8,13 @@ import {
   generateEnforcer,
   generateVideo,
   fetchVideoStatus,
+  generateTestSprite,
+  fetchRuleTestSpriteResults,
   type RuleDetail,
   type ProvenanceItem,
   type EnforcerDetail,
   type VideoResponse,
+  type TestSpriteListItem,
 } from "../api/client";
 import { CodeBlock } from "../components/CodeBlock";
 import { ProvenanceCard } from "../components/ProvenanceCard";
@@ -119,6 +122,45 @@ function StatusBadge({ active }: { active: boolean }) {
   );
 }
 
+function Spinner({ size = 16 }: { size?: number }) {
+  return (
+    <>
+      <span
+        style={{
+          display: "inline-block",
+          width: size,
+          height: size,
+          border: "2px solid #e2e8f0",
+          borderTop: "2px solid currentColor",
+          borderRadius: "50%",
+          animation: "spin 0.8s linear infinite",
+          verticalAlign: "middle",
+        }}
+      />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </>
+  );
+}
+
+const actionButtonStyle = (
+  color: string,
+  disabled: boolean,
+): React.CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  padding: "8px 18px",
+  background: disabled ? "#94a3b8" : color,
+  color: "#fff",
+  border: "none",
+  borderRadius: "8px",
+  cursor: disabled ? "not-allowed" : "pointer",
+  fontSize: "13px",
+  fontWeight: 600,
+  opacity: disabled ? 0.7 : 1,
+  transition: "opacity 0.15s",
+});
+
 function CollapsibleCode({
   title,
   code,
@@ -162,7 +204,7 @@ function CollapsibleCode({
   );
 }
 
-export function RuleDetailPage() {
+export function RuleDetailPage({ repoId }: { repoId: number | null }) {
   const { slug } = useParams<{ slug: string }>();
   const [rule, setRule] = useState<RuleDetail | null>(null);
   const [provenance, setProvenance] = useState<ProvenanceItem[]>([]);
@@ -171,12 +213,21 @@ export function RuleDetailPage() {
   const [enforcer, setEnforcer] = useState<EnforcerDetail | null>(null);
 
   const [enforcerTab, setEnforcerTab] = useState("source");
+
+  // Enforcer generation state
   const [generating, setGenerating] = useState(false);
+
+  // Video generation state
   const [videoGenerating, setVideoGenerating] = useState(false);
   const [videoResult, setVideoResult] = useState<VideoResponse | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [videoElapsed, setVideoElapsed] = useState(0);
   const videoStartRef = useRef<number | null>(null);
+
+  // TestSprite generation state
+  const [tsGenerating, setTsGenerating] = useState(false);
+  const [tsResults, setTsResults] = useState<TestSpriteListItem[]>([]);
+  const [tsError, setTsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!videoGenerating) return;
@@ -194,18 +245,41 @@ export function RuleDetailPage() {
     setLoading(true);
     setError(null);
 
-    Promise.all([fetchRule(slug), fetchProvenance(slug)])
+    Promise.all([fetchRule(slug, repoId ?? undefined), fetchProvenance(slug)])
       .then(([ruleData, provData]) => {
         setRule(ruleData);
         setProvenance(provData);
-        // Try to load enforcer (may 404)
         fetchEnforcer(slug).then(setEnforcer).catch(() => setEnforcer(null));
+        fetchRuleTestSpriteResults(slug).then(setTsResults).catch(() => setTsResults([]));
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Failed to load rule");
       })
       .finally(() => setLoading(false));
-  }, [slug]);
+  }, [slug, repoId]);
+
+  const handleGenerateEnforcer = () => {
+    if (!slug) return;
+    setGenerating(true);
+    generateEnforcer(slug)
+      .then((res) => {
+        const pollId = setInterval(() => {
+          fetchJobStatus(res.job_id)
+            .then((job) => {
+              if (job.status !== "running") {
+                clearInterval(pollId);
+                setGenerating(false);
+                fetchEnforcer(slug).then(setEnforcer).catch(() => {});
+              }
+            })
+            .catch(() => {
+              clearInterval(pollId);
+              setGenerating(false);
+            });
+        }, 2000);
+      })
+      .catch(() => setGenerating(false));
+  };
 
   const handleGenerateVideo = () => {
     if (!slug) return;
@@ -216,7 +290,6 @@ export function RuleDetailPage() {
     videoStartRef.current = Date.now();
     generateVideo(slug)
       .then((res) => {
-        // Poll for completion every 5 seconds
         const pollId = setInterval(() => {
           fetchVideoStatus(res.task_id)
             .then((status) => {
@@ -243,6 +316,38 @@ export function RuleDetailPage() {
       });
   };
 
+  const handleGenerateTestSprite = () => {
+    if (!slug) return;
+    setTsGenerating(true);
+    setTsError(null);
+    generateTestSprite(slug)
+      .then((res) => {
+        const pollId = setInterval(() => {
+          fetchJobStatus(res.job_id)
+            .then((job) => {
+              if (job.status === "completed") {
+                clearInterval(pollId);
+                setTsGenerating(false);
+                fetchRuleTestSpriteResults(slug).then(setTsResults).catch(() => {});
+              } else if (job.status === "failed") {
+                clearInterval(pollId);
+                setTsGenerating(false);
+                setTsError("TestSprite generation failed");
+              }
+            })
+            .catch(() => {
+              clearInterval(pollId);
+              setTsGenerating(false);
+              setTsError("Failed to check job status");
+            });
+        }, 2000);
+      })
+      .catch((err) => {
+        setTsError(err instanceof Error ? err.message : "Failed to start");
+        setTsGenerating(false);
+      });
+  };
+
   if (loading) {
     return <div style={{ textAlign: "center", padding: "48px", color: "#94a3b8" }}>Loading...</div>;
   }
@@ -254,6 +359,9 @@ export function RuleDetailPage() {
       </div>
     );
   }
+
+  const canEnforcer = !!rule.negative_example;
+  const canVideo = !!(rule.positive_example || rule.negative_example);
 
   return (
     <div>
@@ -279,6 +387,83 @@ export function RuleDetailPage() {
           </span>
         </div>
       </div>
+
+      {/* Action bar */}
+      <div
+        style={{
+          display: "flex",
+          gap: "10px",
+          flexWrap: "wrap",
+          alignItems: "center",
+          marginBottom: "32px",
+          padding: "16px 20px",
+          background: "#f8fafc",
+          borderRadius: "10px",
+          border: "1px solid #e2e8f0",
+        }}
+      >
+        <button
+          onClick={handleGenerateEnforcer}
+          disabled={generating || !canEnforcer}
+          title={canEnforcer ? undefined : "Needs a negative example"}
+          style={actionButtonStyle("#3b82f6", generating || !canEnforcer)}
+        >
+          {generating ? <><Spinner /> Generating Enforcer...</> : enforcer ? "Regenerate Enforcer" : "Generate Enforcer"}
+        </button>
+
+        <button
+          onClick={handleGenerateVideo}
+          disabled={videoGenerating || !canVideo}
+          title={canVideo ? undefined : "Needs code examples"}
+          style={actionButtonStyle("#8b5cf6", videoGenerating || !canVideo)}
+        >
+          {videoGenerating ? (
+            <>
+              <Spinner /> Generating Video... {Math.floor(videoElapsed / 60)}:{String(videoElapsed % 60).padStart(2, "0")}
+            </>
+          ) : videoResult?.status === "Success" ? "Regenerate Video" : "Generate Video"}
+        </button>
+
+        <button
+          onClick={handleGenerateTestSprite}
+          disabled={tsGenerating}
+          style={actionButtonStyle("#10b981", tsGenerating)}
+        >
+          {tsGenerating ? <><Spinner /> Generating Tests...</> : tsResults.length > 0 ? "Regenerate Tests" : "Generate Tests"}
+        </button>
+
+        {videoError && (
+          <span style={{ fontSize: "13px", color: "#ef4444" }}>{videoError}</span>
+        )}
+        {tsError && (
+          <span style={{ fontSize: "13px", color: "#ef4444" }}>{tsError}</span>
+        )}
+      </div>
+
+      {/* Video result (show inline when ready) */}
+      {videoResult?.status === "Success" && videoResult.download_url && (
+        <div style={sectionStyle}>
+          <h2 style={sectionTitle}>Video</h2>
+          <video
+            controls
+            style={{
+              width: "100%",
+              maxWidth: "720px",
+              borderRadius: "8px",
+              background: "#000",
+            }}
+            src={videoResult.download_url}
+          />
+          <div style={{ marginTop: "8px", display: "flex", gap: "8px", alignItems: "center" }}>
+            <Badge label="Ready" color="#22c55e" />
+            {videoElapsed > 0 && (
+              <span style={{ fontSize: "13px", color: "#64748b" }}>
+                Generated in {Math.floor(videoElapsed / 60)}:{String(videoElapsed % 60).padStart(2, "0")}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Description */}
       <div style={sectionStyle}>
@@ -369,9 +554,9 @@ export function RuleDetailPage() {
       )}
 
       {/* Enforcer */}
-      <div style={sectionStyle}>
-        <h2 style={sectionTitle}>Enforcer</h2>
-        {enforcer ? (
+      {enforcer && (
+        <div style={sectionStyle}>
+          <h2 style={sectionTitle}>Enforcer</h2>
           <div>
             <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px" }}>
               <Badge
@@ -381,38 +566,6 @@ export function RuleDetailPage() {
               <span style={{ fontSize: "13px", color: "#64748b" }}>
                 {enforcer.check_type} check | {enforcer.attempt_count} attempt(s)
               </span>
-              <button
-                onClick={() => {
-                  if (!slug) return;
-                  setGenerating(true);
-                  generateEnforcer(slug)
-                    .then((res) => {
-                      const pollId = setInterval(() => {
-                        fetchJobStatus(res.job_id).then((job) => {
-                          if (job.status !== "running") {
-                            clearInterval(pollId);
-                            setGenerating(false);
-                            fetchEnforcer(slug).then(setEnforcer).catch(() => {});
-                          }
-                        });
-                      }, 2000);
-                    })
-                    .catch(() => setGenerating(false));
-                }}
-                disabled={generating}
-                style={{
-                  padding: "4px 12px",
-                  background: "#f59e0b",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: generating ? "not-allowed" : "pointer",
-                  fontSize: "12px",
-                  opacity: generating ? 0.6 : 1,
-                }}
-              >
-                {generating ? "Regenerating..." : "Regenerate"}
-              </button>
             </div>
             <TabBar
               tabs={[
@@ -443,138 +596,43 @@ export function RuleDetailPage() {
               </pre>
             )}
           </div>
-        ) : (
-          <div>
-            {rule.negative_example ? (
-              <button
-                onClick={() => {
-                  if (!slug) return;
-                  setGenerating(true);
-                  generateEnforcer(slug)
-                    .then((res) => {
-                      const pollId = setInterval(() => {
-                        fetchJobStatus(res.job_id).then((job) => {
-                          if (job.status !== "running") {
-                            clearInterval(pollId);
-                            setGenerating(false);
-                            fetchEnforcer(slug).then(setEnforcer).catch(() => {});
-                          }
-                        });
-                      }, 2000);
-                    })
-                    .catch(() => setGenerating(false));
-                }}
-                disabled={generating}
-                style={{
-                  padding: "8px 20px",
-                  background: generating ? "#94a3b8" : "#3b82f6",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: generating ? "not-allowed" : "pointer",
-                  fontSize: "14px",
-                  fontWeight: 600,
-                }}
-              >
-                {generating ? "Generating..." : "Add Enforcer"}
-              </button>
-            ) : (
-              <div style={{ color: "#94a3b8", fontSize: "14px" }}>
-                This rule has no negative example, so an enforcer cannot be generated.
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Video */}
-      <div style={sectionStyle}>
-        <h2 style={sectionTitle}>Video</h2>
-        {videoResult?.status === "Success" && videoResult.download_url ? (
-          <div>
-            <video
-              controls
-              style={{
-                width: "100%",
-                maxWidth: "720px",
-                borderRadius: "8px",
-                background: "#000",
-              }}
-              src={videoResult.download_url}
-            />
-            <div style={{ marginTop: "8px", display: "flex", gap: "8px", alignItems: "center" }}>
-              <Badge label="Ready" color="#22c55e" />
-              {videoElapsed > 0 && (
-                <span style={{ fontSize: "13px", color: "#64748b" }}>
-                  Generated in {Math.floor(videoElapsed / 60)}:{String(videoElapsed % 60).padStart(2, "0")}
-                </span>
-              )}
-              <button
-                onClick={() => handleGenerateVideo()}
-                disabled={videoGenerating}
-                style={{
-                  padding: "4px 12px",
-                  background: "#f59e0b",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: videoGenerating ? "not-allowed" : "pointer",
-                  fontSize: "12px",
-                  opacity: videoGenerating ? 0.6 : 1,
-                }}
-              >
-                {videoGenerating ? "Regenerating..." : "Regenerate"}
-              </button>
-            </div>
-          </div>
-        ) : videoGenerating ? (
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+      {/* TestSprite results */}
+      {tsResults.length > 0 && (
+        <div style={sectionStyle}>
+          <h2 style={sectionTitle}>Test Results ({tsResults.length})</h2>
+          {tsResults.map((r) => (
             <div
+              key={r.id}
               style={{
-                width: "20px",
-                height: "20px",
-                border: "3px solid #e2e8f0",
-                borderTop: "3px solid #3b82f6",
-                borderRadius: "50%",
-                animation: "spin 1s linear infinite",
+                display: "flex",
+                gap: "12px",
+                alignItems: "center",
+                padding: "10px 16px",
+                background: "#fff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "8px",
+                marginBottom: "8px",
+                fontSize: "13px",
               }}
-            />
-            <span style={{ color: "#64748b", fontSize: "14px" }}>
-              Generating video... {Math.floor(videoElapsed / 60)}:{String(videoElapsed % 60).padStart(2, "0")}
-            </span>
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          </div>
-        ) : (
-          <div>
-            {videoError && (
-              <div style={{ color: "#ef4444", fontSize: "14px", marginBottom: "8px" }}>
-                {videoError}
-              </div>
-            )}
-            {(rule.positive_example || rule.negative_example) ? (
-              <button
-                onClick={() => handleGenerateVideo()}
-                style={{
-                  padding: "8px 20px",
-                  background: "#8b5cf6",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                  fontWeight: 600,
-                }}
+            >
+              <Badge
+                label={r.status}
+                color={r.status === "passed" ? "#22c55e" : r.status === "failed" ? "#ef4444" : "#f59e0b"}
+              />
+              <span style={{ color: "#64748b" }}>{new Date(r.created_at).toLocaleString()}</span>
+              <Link
+                to={`/tests`}
+                style={{ color: "#3b82f6", textDecoration: "none", marginLeft: "auto" }}
               >
-                Generate Video
-              </button>
-            ) : (
-              <div style={{ color: "#94a3b8", fontSize: "14px" }}>
-                This rule has no code examples, so a video cannot be generated.
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                View details
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Provenance */}
       <div style={sectionStyle}>

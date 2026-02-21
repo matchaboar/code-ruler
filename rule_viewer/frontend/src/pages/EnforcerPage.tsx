@@ -151,7 +151,7 @@ function ExpandedDetail({
   );
 }
 
-export function EnforcerPage() {
+export function EnforcerPage({ repoId }: { repoId: number | null }) {
   const [enforcers, setEnforcers] = useState<EnforcerListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
@@ -160,11 +160,11 @@ export function EnforcerPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchEnforcers()
+    fetchEnforcers(repoId ?? undefined)
       .then(setEnforcers)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [repoId]);
 
   const handleRowClick = (slug: string) => {
     if (expandedSlug === slug) {

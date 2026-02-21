@@ -23,7 +23,7 @@ const subStyle: React.CSSProperties = {
 
 const tableHeaderStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "2fr 1fr 100px 100px 80px 60px",
+  gridTemplateColumns: "2fr 1fr 100px 100px 80px 60px 30px auto",
   gap: "12px",
   padding: "10px 20px",
   fontSize: "12px",
@@ -48,18 +48,18 @@ const emptyStyle: React.CSSProperties = {
   fontSize: "15px",
 };
 
-export function RuleListPage() {
+export function RuleListPage({ repoId }: { repoId: number | null }) {
   const [rules, setRules] = useState<RuleListItem[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [filters, setFilters] = useState<RuleListParams>({});
+  const [filters, setFilters] = useState<Omit<RuleListParams, "repoId">>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadRules = useCallback(async (params: RuleListParams) => {
+  const loadRules = useCallback(async (params: Omit<RuleListParams, "repoId">, rid: number) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchRules(params);
+      const data = await fetchRules({ ...params, repoId: rid });
       setRules(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load rules");
@@ -69,17 +69,32 @@ export function RuleListPage() {
   }, []);
 
   useEffect(() => {
-    fetchStats()
+    if (repoId === null) return;
+    fetchStats(repoId)
       .then(setStats)
       .catch(() => {});
-  }, []);
+  }, [repoId]);
 
   useEffect(() => {
-    loadRules(filters);
-  }, [filters, loadRules]);
+    if (repoId === null) {
+      setRules([]);
+      setLoading(false);
+      return;
+    }
+    loadRules(filters, repoId);
+  }, [filters, repoId, loadRules]);
 
   const categories = stats ? Object.keys(stats.rules_by_category).sort() : [];
   const severities = stats ? Object.keys(stats.rules_by_severity).sort() : [];
+
+  if (repoId === null) {
+    return (
+      <div>
+        <h1 style={headingStyle}>Rules</h1>
+        <p style={subStyle}>Select a repository from the header to view rules.</p>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -111,6 +126,8 @@ export function RuleListPage() {
           <span>Sources</span>
           <span>Status</span>
           <span>Type</span>
+          <span></span>
+          <span>Tests</span>
         </div>
         {loading ? (
           <div style={emptyStyle}>Loading rules...</div>

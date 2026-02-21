@@ -89,11 +89,12 @@ def test_rule_provenance(session, sample_rule, sample_pr, sample_review_comment)
     assert loaded.pull_request_id == sample_pr.id
 
 
-def test_create_rule_inserts_new(session):
+def test_create_rule_inserts_new(session, sample_repo):
     """create_rule inserts a new rule when the slug doesn't exist."""
     rule = create_rule(
         session,
         slug="new-rule",
+        repo_id=sample_repo.id,
         category="lint",
         severity="warning",
         title="New rule",
@@ -107,11 +108,12 @@ def test_create_rule_inserts_new(session):
     assert session.query(Rule).filter_by(slug="new-rule").count() == 1
 
 
-def test_create_rule_upserts_on_duplicate_slug(session):
+def test_create_rule_upserts_on_duplicate_slug(session, sample_repo):
     """create_rule updates the existing rule instead of raising IntegrityError."""
     rule1 = create_rule(
         session,
         slug="duplicate-slug",
+        repo_id=sample_repo.id,
         category="lint",
         severity="warning",
         title="Original title",
@@ -123,10 +125,11 @@ def test_create_rule_upserts_on_duplicate_slug(session):
     original_id = rule1.id
     assert rule1.version == 1
 
-    # Same slug, different content — must NOT raise IntegrityError
+    # Same slug + repo_id, different content — must NOT raise IntegrityError
     rule2 = create_rule(
         session,
         slug="duplicate-slug",
+        repo_id=sample_repo.id,
         category="best_practice",
         severity="error",
         title="Updated title",

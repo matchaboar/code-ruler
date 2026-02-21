@@ -24,6 +24,7 @@ class ExtractionContext:
     diff_hunk: str
     pr_id: int
     review_comment_id: int
+    repo_id: int
 
 
 def build_contexts(
@@ -73,6 +74,7 @@ def build_contexts(
                 diff_hunk=comment.diff_hunk,
                 pr_id=pr.id,
                 review_comment_id=comment.id,
+                repo_id=repo.id,
             )
         )
 

@@ -23,7 +23,12 @@
       "Bash(podman ps:*)",
       "Bash(uv run ruff check:*)",
       "WebFetch(domain:docs.testsprite.com)",
-      "WebFetch(domain:www.testsprite.com)"
+      "WebFetch(domain:www.testsprite.com)",
+      "mcp__TestSprite__testsprite_bootstrap",
+      "mcp__TestSprite__testsprite_generate_code_summary",
+      "mcp__TestSprite__testsprite_generate_standardized_prd",
+      "mcp__TestSprite__testsprite_generate_backend_test_plan",
+      "mcp__TestSprite__testsprite_generate_code_and_execute"
     ]
   }
 }

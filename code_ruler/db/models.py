@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, Boolean, JSON
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, Boolean, JSON, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from github_extractor.models import Base
@@ -12,9 +12,13 @@ from github_extractor.models import Base
 
 class Rule(Base):
     __tablename__ = "rules"
+    __table_args__ = (
+        UniqueConstraint("slug", "repo_id", name="uq_rule_slug_repo"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    slug: Mapped[str] = mapped_column(String(255), nullable=False)
+    repo_id: Mapped[int] = mapped_column(ForeignKey("repositories.id"), nullable=False)
     category: Mapped[str] = mapped_column(String(50), nullable=False)  # best_practice, lint, function_usage, function_type
     severity: Mapped[str] = mapped_column(String(20), nullable=False)  # error, warning, info
     title: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -33,7 +37,9 @@ class Rule(Base):
     enforcer_script: Mapped[EnforcerScript | None] = relationship(
         back_populates="rule", uselist=False
     )
+    testsprite_results: Mapped[list[TestSpriteResult]] = relationship(back_populates="rule")
     provenance: Mapped[list[RuleProvenance]] = relationship(back_populates="rule")
+    repository = relationship("Repository", foreign_keys=[repo_id])
 
 
 class FunctionTypeRule(Base):
@@ -119,3 +125,21 @@ class PipelineEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     job: Mapped[PipelineJob] = relationship(back_populates="events")
+
+
+class TestSpriteResult(Base):
+    __tablename__ = "testsprite_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rule_id: Mapped[int] = mapped_column(ForeignKey("rules.id"), nullable=False)
+    repo_url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    test_plan_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    generated_tests: Mapped[str | None] = mapped_column(Text, nullable=True)
+    test_results_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    diff: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    rule: Mapped[Rule] = relationship(back_populates="testsprite_results")

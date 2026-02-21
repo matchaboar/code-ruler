@@ -106,7 +106,7 @@ def process_single_review_workflow(
     review_candidates = []
     stored = 0
     for candidate in candidates:
-        decision = dedup_step(db_path, candidate)
+        decision = dedup_step(db_path, candidate, ctx.get("repo_id"))
 
         if decision["action"] == "discard":
             review_candidates.append({
@@ -145,8 +145,8 @@ def extract_rules_step(ctx: dict) -> list[dict]:
 
 
 @DBOS.step()
-def dedup_step(db_path: str, candidate_dict: dict) -> dict:
-    """LLM call #2: check if a candidate rule is a duplicate."""
+def dedup_step(db_path: str, candidate_dict: dict, repo_id: int | None = None) -> dict:
+    """LLM call #2: check if a candidate rule is a duplicate (per-repo)."""
     from code_ruler.db.base import get_engine, get_session_factory, init_db
     from code_ruler.db.repository import get_all_rules
     from code_ruler.extraction.rule_deduplicator import check_duplicate
@@ -160,7 +160,7 @@ def dedup_step(db_path: str, candidate_dict: dict) -> dict:
         init_db(engine)
         factory = get_session_factory(engine)
         with factory() as session:
-            existing = get_all_rules(session)
+            existing = get_all_rules(session, repo_id=repo_id)
             client = get_client()
             candidate = CandidateRule(**candidate_dict)
             decision = check_duplicate(client, candidate, existing, DEFAULT_MODEL)
@@ -194,6 +194,7 @@ def store_rule_step(db_path: str, candidate_dict: dict, ctx: dict) -> dict:
             rule = create_rule(
                 session,
                 slug=candidate.slug,
+                repo_id=ctx["repo_id"],
                 category=candidate.category,
                 severity=candidate.severity,
                 title=candidate.title,

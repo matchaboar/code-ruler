@@ -303,6 +303,48 @@ def start_generate_enforcer_job(rule_slug: str) -> str:
     return job_id
 
 
+def start_generate_testsprite_job(rule_slug: str, repo_url: str) -> str:
+    """Start a background job to generate TestSprite tests for a rule."""
+    job_id = uuid.uuid4().hex[:12]
+    db_path = get_db_path()
+
+    from code_ruler.db.base import get_engine, get_session_factory, init_db
+
+    job = JobInfo(
+        job_id=job_id,
+        kind="generate-testsprite",
+        status="running",
+        logs=[],
+        events=[],
+        repo_url=repo_url,
+        started_at=datetime.now(timezone.utc).isoformat(),
+    )
+    _jobs[job_id] = job
+
+    def _do_generate() -> None:
+        engine = get_engine(db_path)
+        init_db(engine)
+        factory = get_session_factory(engine)
+        print(f"Generating TestSprite tests for rule '{rule_slug}'...")
+        with factory() as session:
+            from code_ruler.db.models import Rule
+            rule = session.query(Rule).filter_by(slug=rule_slug).first()
+            if not rule:
+                raise ValueError(f"Rule '{rule_slug}' not found")
+
+            from code_ruler.testsprite.client import generate_tests
+            result = generate_tests(session, rule, repo_url)
+            print(f"TestSprite generation complete. Status: {result.status}")
+            job.events.append(JobEvent(
+                type="testsprite_done",
+                data={"rule_slug": rule_slug, "status": result.status, "result_id": result.id},
+            ))
+
+    t = threading.Thread(target=_run_in_thread, args=(job, _do_generate, ()), daemon=True)
+    t.start()
+    return job_id
+
+
 def start_quick_run_job(repo_url: str, pr_limit: int = 10) -> str:
     """Start a quick run: extract PRs then extract rules in one go."""
     job_id = uuid.uuid4().hex[:12]

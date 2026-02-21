@@ -5,19 +5,29 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 
+class RepoItem(BaseModel):
+    id: int
+    full_name: str
+    url: str
+    total_rules: int
+
+
 class RuleListItem(BaseModel):
     slug: str
+    repo_id: int
     category: str
     severity: str
     title: str
     is_active: bool
     has_decorator: bool
     has_enforcer: bool
+    has_tests: bool
     provenance_count: int
 
 
 class RuleDetail(BaseModel):
     slug: str
+    repo_id: int
     category: str
     severity: str
     title: str
@@ -154,6 +164,30 @@ class EnforcerDetail(BaseModel):
     test_output: str | None
     diff: str | None
     dd_traces: list[dict] | None
+    created_at: str
+    updated_at: str
+
+
+class TestSpriteListItem(BaseModel):
+    id: int
+    rule_slug: str
+    rule_title: str
+    repo_url: str
+    status: str
+    created_at: str
+
+
+class TestSpriteDetail(BaseModel):
+    id: int
+    rule_slug: str
+    rule_title: str
+    repo_url: str
+    status: str
+    test_plan: dict | None
+    generated_tests: str | None
+    test_results: dict | None
+    diff: str | None
+    error_message: str | None
     created_at: str
     updated_at: str
 

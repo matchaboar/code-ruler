@@ -6,26 +6,32 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from code_ruler.db.models import EnforcerScript, FunctionTypeRule, Rule, RuleProvenance
+from code_ruler.db.models import EnforcerScript, FunctionTypeRule, Rule, RuleProvenance, TestSpriteResult
 
 
-def get_all_rules(session: Session, active_only: bool = False) -> list[Rule]:
-    """Get all rules, optionally filtered to active only."""
+def get_all_rules(session: Session, repo_id: int | None = None, active_only: bool = False) -> list[Rule]:
+    """Get all rules, optionally filtered by repo and/or active only."""
     query = session.query(Rule)
+    if repo_id is not None:
+        query = query.filter(Rule.repo_id == repo_id)
     if active_only:
         query = query.filter(Rule.is_active.is_(True))
     return query.all()
 
 
-def get_rule_by_slug(session: Session, slug: str) -> Rule | None:
-    """Get a rule by slug."""
-    return session.query(Rule).filter_by(slug=slug).first()
+def get_rule_by_slug(session: Session, slug: str, repo_id: int | None = None) -> Rule | None:
+    """Get a rule by slug, optionally scoped to a repo."""
+    query = session.query(Rule).filter_by(slug=slug)
+    if repo_id is not None:
+        query = query.filter(Rule.repo_id == repo_id)
+    return query.first()
 
 
 def create_rule(
     session: Session,
     *,
     slug: str,
+    repo_id: int,
     category: str,
     severity: str,
     title: str,
@@ -34,9 +40,9 @@ def create_rule(
     negative_example: str | None,
     rationale: str,
 ) -> Rule:
-    """Create a new rule, or update the existing one if the slug already exists."""
+    """Create a new rule, or update the existing one if the slug+repo_id already exists."""
     now = datetime.now(timezone.utc)
-    existing = session.query(Rule).filter_by(slug=slug).first()
+    existing = session.query(Rule).filter_by(slug=slug, repo_id=repo_id).first()
     if existing:
         existing.category = category
         existing.severity = severity
@@ -51,6 +57,7 @@ def create_rule(
         return existing
     rule = Rule(
         slug=slug,
+        repo_id=repo_id,
         category=category,
         severity=severity,
         title=title,
@@ -163,9 +170,12 @@ def get_enforcer_by_rule_id(session: Session, rule_id: int) -> EnforcerScript | 
     return session.query(EnforcerScript).filter_by(rule_id=rule_id).first()
 
 
-def get_all_enforcers(session: Session) -> list[EnforcerScript]:
-    """Get all enforcer scripts."""
-    return session.query(EnforcerScript).all()
+def get_all_enforcers(session: Session, repo_id: int | None = None) -> list[EnforcerScript]:
+    """Get all enforcer scripts, optionally filtered by repo."""
+    query = session.query(EnforcerScript)
+    if repo_id is not None:
+        query = query.join(Rule, EnforcerScript.rule_id == Rule.id).filter(Rule.repo_id == repo_id)
+    return query.all()
 
 
 def update_enforcer_script(session: Session, enforcer: EnforcerScript, **kwargs: object) -> EnforcerScript:
@@ -187,3 +197,64 @@ def update_rule(session: Session, rule: Rule, **kwargs: object) -> Rule:
     rule.version += 1
     session.flush()
     return rule
+
+
+# ---- TestSpriteResult CRUD ----
+
+def create_testsprite_result(
+    session: Session,
+    *,
+    rule_id: int,
+    repo_url: str,
+    status: str = "pending",
+    test_plan_json: dict | None = None,
+    generated_tests: str | None = None,
+    test_results_json: dict | None = None,
+    diff: str | None = None,
+    error_message: str | None = None,
+) -> TestSpriteResult:
+    """Create a new TestSprite result record."""
+    now = datetime.now(timezone.utc)
+    result = TestSpriteResult(
+        rule_id=rule_id,
+        repo_url=repo_url,
+        status=status,
+        test_plan_json=test_plan_json,
+        generated_tests=generated_tests,
+        test_results_json=test_results_json,
+        diff=diff,
+        error_message=error_message,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(result)
+    session.flush()
+    return result
+
+
+def get_testsprite_results_by_rule_id(session: Session, rule_id: int) -> list[TestSpriteResult]:
+    """Get all TestSprite results for a rule."""
+    return session.query(TestSpriteResult).filter_by(rule_id=rule_id).order_by(TestSpriteResult.created_at.desc()).all()
+
+
+def get_testsprite_result(session: Session, result_id: int) -> TestSpriteResult | None:
+    """Get a single TestSprite result by ID."""
+    return session.get(TestSpriteResult, result_id)
+
+
+def update_testsprite_result(session: Session, result: TestSpriteResult, **kwargs: object) -> TestSpriteResult:
+    """Update a TestSprite result's fields."""
+    for key, value in kwargs.items():
+        if hasattr(result, key):
+            setattr(result, key, value)
+    result.updated_at = datetime.now(timezone.utc)
+    session.flush()
+    return result
+
+
+def get_all_testsprite_results(session: Session, repo_id: int | None = None) -> list[TestSpriteResult]:
+    """Get all TestSprite results, optionally filtered by repo."""
+    query = session.query(TestSpriteResult)
+    if repo_id is not None:
+        query = query.join(Rule, TestSpriteResult.rule_id == Rule.id).filter(Rule.repo_id == repo_id)
+    return query.order_by(TestSpriteResult.created_at.desc()).all()

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from code_ruler.db.models import EnforcerScript, FunctionTypeRule, Rule, RuleProvenance
+from code_ruler.db.models import EnforcerScript, FunctionTypeRule, Rule, RuleProvenance, TestSpriteResult
 from github_extractor.models import PullRequest, Repository, ReviewComment
 from rule_viewer.api.pipeline import (
     get_all_jobs,
@@ -18,6 +18,7 @@ from rule_viewer.api.pipeline import (
     start_extract_prs_job,
     start_extract_rules_job,
     start_generate_enforcer_job,
+    start_generate_testsprite_job,
     start_quick_extract_rules_job,
     start_quick_fetch_prs_job,
     start_quick_run_job,
@@ -36,11 +37,14 @@ from rule_viewer.api.schemas import (
     QuickExtractRequest,
     QuickFetchRequest,
     QuickRunRequest,
+    RepoItem,
     RepoStatsResponse,
     RuleDetail,
     RuleListItem,
     ServiceStatus,
     StatsResponse,
+    TestSpriteDetail,
+    TestSpriteListItem,
     VideoResponse,
 )
 
@@ -55,16 +59,35 @@ def get_db() -> Session:
     raise NotImplementedError("Database session not configured")
 
 
+@router.get("/repos", response_model=list[RepoItem])
+def list_repos(db: Session = Depends(get_db)) -> list[RepoItem]:
+    """List all repositories with rule counts."""
+    repos = db.query(Repository).order_by(Repository.full_name).all()
+    items = []
+    for repo in repos:
+        total_rules = db.query(Rule).filter(Rule.repo_id == repo.id).count()
+        items.append(
+            RepoItem(
+                id=repo.id,
+                full_name=repo.full_name,
+                url=f"https://github.com/{repo.full_name}",
+                total_rules=total_rules,
+            )
+        )
+    return items
+
+
 @router.get("/rules", response_model=list[RuleListItem])
 def list_rules(
+    repo_id: int = Query(..., description="Filter rules by repository ID"),
     category: str | None = Query(None),
     severity: str | None = Query(None),
     is_active: bool | None = Query(None),
     search: str | None = Query(None),
     db: Session = Depends(get_db),
 ) -> list[RuleListItem]:
-    """List rules with optional filters."""
-    query = db.query(Rule)
+    """List rules with optional filters, scoped to a repository."""
+    query = db.query(Rule).filter(Rule.repo_id == repo_id)
 
     if category:
         query = query.filter(Rule.category == category)
@@ -88,15 +111,20 @@ def list_rules(
         has_enforcer = (
             db.query(EnforcerScript).filter_by(rule_id=rule.id).first() is not None
         )
+        has_tests = (
+            db.query(TestSpriteResult).filter_by(rule_id=rule.id).first() is not None
+        )
         items.append(
             RuleListItem(
                 slug=rule.slug,
+                repo_id=rule.repo_id,
                 category=rule.category,
                 severity=rule.severity,
                 title=rule.title,
                 is_active=rule.is_active,
                 has_decorator=has_decorator,
                 has_enforcer=has_enforcer,
+                has_tests=has_tests,
                 provenance_count=provenance_count,
             )
         )
@@ -105,9 +133,16 @@ def list_rules(
 
 
 @router.get("/rules/{slug}", response_model=RuleDetail)
-def get_rule(slug: str, db: Session = Depends(get_db)) -> RuleDetail:
+def get_rule(
+    slug: str,
+    repo_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+) -> RuleDetail:
     """Get a single rule with full detail."""
-    rule = db.query(Rule).filter_by(slug=slug).first()
+    query = db.query(Rule).filter_by(slug=slug)
+    if repo_id is not None:
+        query = query.filter(Rule.repo_id == repo_id)
+    rule = query.first()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
 
@@ -115,6 +150,7 @@ def get_rule(slug: str, db: Session = Depends(get_db)) -> RuleDetail:
 
     return RuleDetail(
         slug=rule.slug,
+        repo_id=rule.repo_id,
         category=rule.category,
         severity=rule.severity,
         title=rule.title,
@@ -196,9 +232,15 @@ def generate_enforcer(slug: str, db: Session = Depends(get_db)) -> JobStartRespo
 
 
 @router.get("/enforcers", response_model=list[EnforcerListItem])
-def list_enforcers(db: Session = Depends(get_db)) -> list[EnforcerListItem]:
-    """List all rules with enforcer scripts."""
-    enforcers = db.query(EnforcerScript).all()
+def list_enforcers(
+    repo_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+) -> list[EnforcerListItem]:
+    """List all rules with enforcer scripts, optionally scoped to a repo."""
+    query = db.query(EnforcerScript)
+    if repo_id is not None:
+        query = query.join(Rule, EnforcerScript.rule_id == Rule.id).filter(Rule.repo_id == repo_id)
+    enforcers = query.all()
     items = []
     for es in enforcers:
         rule = db.get(Rule, es.rule_id)
@@ -260,6 +302,104 @@ def get_enforcer(slug: str, db: Session = Depends(get_db)) -> EnforcerDetail:
         dd_traces=es.dd_traces if isinstance(es.dd_traces, list) else None,
         created_at=es.created_at.isoformat(),
         updated_at=es.updated_at.isoformat(),
+    )
+
+
+@router.post("/rules/{slug}/generate-testsprite", response_model=JobStartResponse)
+def generate_testsprite(slug: str, db: Session = Depends(get_db)) -> JobStartResponse:
+    """Trigger TestSprite test generation for a rule."""
+    rule = db.query(Rule).filter_by(slug=slug).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+
+    # Check for in-progress generation
+    from rule_viewer.api.pipeline import get_all_jobs as _get_all_jobs
+    for job in _get_all_jobs():
+        if job.kind == "generate-testsprite" and job.status == "running":
+            for ev in job.events:
+                if ev.data.get("rule_slug") == slug:
+                    raise HTTPException(status_code=409, detail="TestSprite generation already in progress")
+
+    # Resolve repo_url from provenance if not directly available
+    repo = db.get(Repository, rule.repo_id)
+    if not repo:
+        raise HTTPException(status_code=400, detail="Rule has no associated repository")
+    repo_url = f"https://github.com/{repo.full_name}"
+
+    job_id = start_generate_testsprite_job(slug, repo_url)
+    return JobStartResponse(job_id=job_id)
+
+
+@router.get("/testsprite", response_model=list[TestSpriteListItem])
+def list_testsprite_results(
+    repo_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+) -> list[TestSpriteListItem]:
+    """List all TestSprite results, optionally scoped to a repo."""
+    query = db.query(TestSpriteResult)
+    if repo_id is not None:
+        query = query.join(Rule, TestSpriteResult.rule_id == Rule.id).filter(Rule.repo_id == repo_id)
+    results = query.order_by(TestSpriteResult.created_at.desc()).all()
+    items = []
+    for r in results:
+        rule = db.get(Rule, r.rule_id)
+        if not rule:
+            continue
+        items.append(
+            TestSpriteListItem(
+                id=r.id,
+                rule_slug=rule.slug,
+                rule_title=rule.title,
+                repo_url=r.repo_url,
+                status=r.status,
+                created_at=r.created_at.isoformat(),
+            )
+        )
+    return items
+
+
+@router.get("/rules/{slug}/testsprite", response_model=list[TestSpriteListItem])
+def list_rule_testsprite_results(slug: str, db: Session = Depends(get_db)) -> list[TestSpriteListItem]:
+    """List TestSprite results for a specific rule."""
+    rule = db.query(Rule).filter_by(slug=slug).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    results = db.query(TestSpriteResult).filter_by(rule_id=rule.id).order_by(TestSpriteResult.created_at.desc()).all()
+    return [
+        TestSpriteListItem(
+            id=r.id,
+            rule_slug=rule.slug,
+            rule_title=rule.title,
+            repo_url=r.repo_url,
+            status=r.status,
+            created_at=r.created_at.isoformat(),
+        )
+        for r in results
+    ]
+
+
+@router.get("/testsprite/{result_id}", response_model=TestSpriteDetail)
+def get_testsprite_detail(result_id: int, db: Session = Depends(get_db)) -> TestSpriteDetail:
+    """Get detailed TestSprite result including diff and test output."""
+    r = db.get(TestSpriteResult, result_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="TestSprite result not found")
+    rule = db.get(Rule, r.rule_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Associated rule not found")
+    return TestSpriteDetail(
+        id=r.id,
+        rule_slug=rule.slug,
+        rule_title=rule.title,
+        repo_url=r.repo_url,
+        status=r.status,
+        test_plan=r.test_plan_json,
+        generated_tests=r.generated_tests,
+        test_results=r.test_results_json,
+        diff=r.diff,
+        error_message=r.error_message,
+        created_at=r.created_at.isoformat(),
+        updated_at=r.updated_at.isoformat(),
     )
 
 
@@ -329,17 +469,28 @@ def get_video_status(task_id: str) -> VideoResponse:
 
 
 @router.get("/stats", response_model=StatsResponse)
-def get_stats(db: Session = Depends(get_db)) -> StatsResponse:
-    """Get summary statistics."""
-    total_rules = db.query(Rule).count()
+def get_stats(
+    repo_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+) -> StatsResponse:
+    """Get summary statistics, optionally scoped to a repo."""
+    rule_query = db.query(Rule)
+    if repo_id is not None:
+        rule_query = rule_query.filter(Rule.repo_id == repo_id)
+
+    total_rules = rule_query.count()
 
     category_counts = dict(
-        db.query(Rule.category, func.count()).group_by(Rule.category).all()
+        rule_query.with_entities(Rule.category, func.count()).group_by(Rule.category).all()
     )
     severity_counts = dict(
-        db.query(Rule.severity, func.count()).group_by(Rule.severity).all()
+        rule_query.with_entities(Rule.severity, func.count()).group_by(Rule.severity).all()
     )
-    total_prs = db.query(PullRequest).count()
+
+    pr_query = db.query(PullRequest)
+    if repo_id is not None:
+        pr_query = pr_query.filter(PullRequest.repo_id == repo_id)
+    total_prs = pr_query.count()
 
     return StatsResponse(
         total_rules=total_rules,
@@ -407,6 +558,13 @@ def check_credentials() -> CredentialsStatusResponse:
             )
         except Exception as e:
             services.append(ServiceStatus(name="GitHub", ok=False, detail=str(e)[:200]))
+
+    # Check TestSprite
+    ts_key = os.environ.get("TESTSPRITE_API_KEY", "")
+    if not ts_key:
+        services.append(ServiceStatus(name="TestSprite", ok=False, detail="TESTSPRITE_API_KEY not set"))
+    else:
+        services.append(ServiceStatus(name="TestSprite", ok=True, detail="API key configured"))
 
     return CredentialsStatusResponse(services=services)
 

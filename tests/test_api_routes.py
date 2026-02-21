@@ -61,7 +61,7 @@ def test_db():
     session.flush()
 
     rule = Rule(
-        slug="no-bare-except", category="lint", severity="warning",
+        slug="no-bare-except", repo_id=repo.id, category="lint", severity="warning",
         title="No bare except", description="Don't use bare except.",
         rationale="Catches too broadly.", created_at=now, updated_at=now,
         version=1, is_active=True,
@@ -99,22 +99,26 @@ def client(test_db):
     app.dependency_overrides.clear()
 
 
-def test_list_rules(client):
+def test_list_rules(client, test_db):
     """Test GET /api/rules returns rules."""
-    response = client.get("/api/rules")
+    session, _ = test_db
+    repo = session.query(Repository).first()
+    response = client.get(f"/api/rules?repo_id={repo.id}")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
     assert data[0]["slug"] == "no-bare-except"
 
 
-def test_list_rules_filter_category(client):
+def test_list_rules_filter_category(client, test_db):
     """Test filtering rules by category."""
-    response = client.get("/api/rules?category=lint")
+    session, _ = test_db
+    repo = session.query(Repository).first()
+    response = client.get(f"/api/rules?repo_id={repo.id}&category=lint")
     assert response.status_code == 200
     assert len(response.json()) == 1
 
-    response = client.get("/api/rules?category=best_practice")
+    response = client.get(f"/api/rules?repo_id={repo.id}&category=best_practice")
     assert response.status_code == 200
     assert len(response.json()) == 0
 
