@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from code_ruler.db.models import EnforcerScript, FunctionTypeRule, Rule, RuleProvenance, TestSpriteResult
+from code_ruler.db.models import EnforcerScript, FunctionTypeRule, Rule, RuleProvenance, TestSpriteResult, VideoTask
 from github_extractor.models import PullRequest, Repository, ReviewComment
 from rule_viewer.api.pipeline import (
     get_all_jobs,
@@ -45,6 +45,7 @@ from rule_viewer.api.schemas import (
     StatsResponse,
     TestSpriteDetail,
     TestSpriteListItem,
+    VideoListItem,
     VideoResponse,
 )
 
@@ -410,6 +411,8 @@ def generate_video(
     db: Session = Depends(get_db),
 ) -> VideoResponse:
     """Submit a video generation task for a rule. Returns immediately with a task_id."""
+    from datetime import datetime, timezone
+
     rule = db.query(Rule).filter_by(slug=slug).first()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -430,15 +433,30 @@ def generate_video(
         rationale=rule.rationale,
     )
 
+    prompt = req.prompt or _DEFAULT_PROMPT
     image_bytes = render_rule_image(candidate)
-    task_id = submit_image_to_video(image_bytes, req.prompt or _DEFAULT_PROMPT)
+    task_id = submit_image_to_video(image_bytes, prompt)
 
-    return VideoResponse(task_id=task_id, status="Processing")
+    now = datetime.now(timezone.utc)
+    vt = VideoTask(
+        rule_id=rule.id,
+        task_id=task_id,
+        status="Processing",
+        prompt=prompt,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(vt)
+    db.commit()
+
+    return VideoResponse(task_id=task_id, status="Processing", slug=slug)
 
 
 @router.get("/video/{task_id}", response_model=VideoResponse)
-def get_video_status(task_id: str) -> VideoResponse:
+def get_video_status(task_id: str, db: Session = Depends(get_db)) -> VideoResponse:
     """Poll Minimax for the status of a video generation task."""
+    from datetime import datetime, timezone
+
     from code_ruler.video.minimax_client import get_api_key, get_video_download_url
 
     import httpx
@@ -453,19 +471,133 @@ def get_video_status(task_id: str) -> VideoResponse:
         resp.raise_for_status()
         data = resp.json()
 
+    vt = db.query(VideoTask).filter_by(task_id=task_id).first()
+    slug = None
+    if vt:
+        rule = db.get(Rule, vt.rule_id)
+        slug = rule.slug if rule else None
+
     status = data.get("status", "")
     if status == "Success":
         file_id = data.get("file_id", "")
         download_url = get_video_download_url(file_id) if file_id else None
+        if vt:
+            vt.status = "Success"
+            vt.file_id = file_id
+            vt.download_url = download_url
+            vt.updated_at = datetime.now(timezone.utc)
+            db.commit()
         return VideoResponse(
-            task_id=task_id, status="Success", file_id=file_id, download_url=download_url
+            task_id=task_id, status="Success", slug=slug, file_id=file_id, download_url=download_url
         )
     elif status == "Fail":
+        error_msg = data.get("error", "Unknown error")
+        if vt:
+            vt.status = "Fail"
+            vt.error = error_msg
+            vt.updated_at = datetime.now(timezone.utc)
+            db.commit()
         return VideoResponse(
-            task_id=task_id, status="Fail", error=data.get("error", "Unknown error")
+            task_id=task_id, status="Fail", slug=slug, error=error_msg
         )
 
-    return VideoResponse(task_id=task_id, status="Processing")
+    return VideoResponse(task_id=task_id, status="Processing", slug=slug)
+
+
+@router.get("/rules/{slug}/video", response_model=VideoResponse)
+def get_rule_video(slug: str, db: Session = Depends(get_db)) -> VideoResponse:
+    """Get the latest video task for a rule. Refreshes status from Minimax if still processing."""
+    from datetime import datetime, timezone
+
+    rule = db.query(Rule).filter_by(slug=slug).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+
+    vt = (
+        db.query(VideoTask)
+        .filter_by(rule_id=rule.id)
+        .order_by(VideoTask.created_at.desc())
+        .first()
+    )
+    if not vt:
+        raise HTTPException(status_code=404, detail="No video task for this rule")
+
+    # If already terminal, return from DB without hitting Minimax
+    if vt.status in ("Success", "Fail"):
+        return VideoResponse(
+            task_id=vt.task_id,
+            status=vt.status,
+            slug=slug,
+            file_id=vt.file_id,
+            download_url=vt.download_url,
+            error=vt.error,
+        )
+
+    # Still processing — refresh from Minimax
+    from code_ruler.video.minimax_client import get_api_key, get_video_download_url
+
+    import httpx
+
+    api_key = get_api_key()
+    with httpx.Client(timeout=30) as client:
+        resp = client.get(
+            "https://api.minimax.io/v1/query/video_generation",
+            params={"task_id": vt.task_id},
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    status = data.get("status", "")
+    now = datetime.now(timezone.utc)
+
+    if status == "Success":
+        file_id = data.get("file_id", "")
+        download_url = get_video_download_url(file_id) if file_id else None
+        vt.status = "Success"
+        vt.file_id = file_id
+        vt.download_url = download_url
+        vt.updated_at = now
+        db.commit()
+        return VideoResponse(
+            task_id=vt.task_id, status="Success", slug=slug,
+            file_id=file_id, download_url=download_url,
+        )
+    elif status == "Fail":
+        error_msg = data.get("error", "Unknown error")
+        vt.status = "Fail"
+        vt.error = error_msg
+        vt.updated_at = now
+        db.commit()
+        return VideoResponse(
+            task_id=vt.task_id, status="Fail", slug=slug, error=error_msg,
+        )
+
+    return VideoResponse(task_id=vt.task_id, status="Processing", slug=slug)
+
+
+@router.get("/videos", response_model=list[VideoListItem])
+def list_videos(db: Session = Depends(get_db)) -> list[VideoListItem]:
+    """List all video tasks (most recent first)."""
+    tasks = db.query(VideoTask).order_by(VideoTask.created_at.desc()).all()
+    items = []
+    for vt in tasks:
+        rule = db.get(Rule, vt.rule_id)
+        if not rule:
+            continue
+        items.append(
+            VideoListItem(
+                id=vt.id,
+                rule_slug=rule.slug,
+                rule_title=rule.title,
+                task_id=vt.task_id,
+                status=vt.status,
+                download_url=vt.download_url,
+                error=vt.error,
+                created_at=vt.created_at.isoformat(),
+            )
+        )
+    return items
 
 
 @router.get("/stats", response_model=StatsResponse)
@@ -592,26 +724,27 @@ def get_job_status(job_id: str, db: Session = Depends(get_db)) -> JobStatusRespo
         from code_ruler.db.models import PipelineEvent, PipelineJob
 
         pj = db.get(PipelineJob, job_id)
-        if not pj:
-            raise HTTPException(status_code=404, detail="Job not found")
-        events = db.query(PipelineEvent).filter_by(job_id=job_id).order_by(PipelineEvent.created_at).all()
-        return JobStatusResponse(
-            job_id=pj.id,
-            kind=pj.job_type,
-            status=pj.status,
-            logs=[],
-            events=[
-                JobEventResponse(type=e.event_type, data=e.event_data_json or {})
-                for e in events
-            ],
-            repo_url=pj.repo_url,
-            started_at=pj.created_at.isoformat(),
-            finished_at=pj.finished_at.isoformat() if pj.finished_at else None,
-            error=pj.error_message,
-            workflow_id=pj.workflow_id,
-        )
+        if pj:
+            events = db.query(PipelineEvent).filter_by(job_id=job_id).order_by(PipelineEvent.created_at).all()
+            return JobStatusResponse(
+                job_id=pj.id,
+                kind=pj.job_type,
+                status=pj.status,
+                logs=[],
+                events=[
+                    JobEventResponse(type=e.event_type, data=e.event_data_json or {})
+                    for e in events
+                ],
+                repo_url=pj.repo_url,
+                started_at=pj.created_at.isoformat(),
+                finished_at=pj.finished_at.isoformat() if pj.finished_at else None,
+                error=pj.error_message,
+                workflow_id=pj.workflow_id,
+            )
+        # Fall through to in-memory lookup for jobs not persisted to DB
+        # (e.g. generate-testsprite jobs which use the legacy thread path)
 
-    # Legacy in-memory path
+    # In-memory path
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -627,21 +760,29 @@ def list_jobs(db: Session = Depends(get_db)) -> list[JobStatusResponse]:
         from code_ruler.db.models import PipelineJob
 
         jobs = db.query(PipelineJob).order_by(PipelineJob.created_at.desc()).all()
-        return [
-            JobStatusResponse(
-                job_id=pj.id,
-                kind=pj.job_type,
-                status=pj.status,
-                logs=[],
-                events=[],
-                repo_url=pj.repo_url,
-                started_at=pj.created_at.isoformat(),
-                finished_at=pj.finished_at.isoformat() if pj.finished_at else None,
-                error=pj.error_message,
-                workflow_id=pj.workflow_id,
+        db_job_ids = set()
+        result = []
+        for pj in jobs:
+            db_job_ids.add(pj.id)
+            result.append(
+                JobStatusResponse(
+                    job_id=pj.id,
+                    kind=pj.job_type,
+                    status=pj.status,
+                    logs=[],
+                    events=[],
+                    repo_url=pj.repo_url,
+                    started_at=pj.created_at.isoformat(),
+                    finished_at=pj.finished_at.isoformat() if pj.finished_at else None,
+                    error=pj.error_message,
+                    workflow_id=pj.workflow_id,
+                )
             )
-            for pj in jobs
-        ]
+        # Include in-memory jobs not persisted to DB
+        for j in get_all_jobs():
+            if j.job_id not in db_job_ids:
+                result.append(JobStatusResponse(**j.model_dump()))
+        return result
 
     return [JobStatusResponse(**j.model_dump()) for j in get_all_jobs()]
 

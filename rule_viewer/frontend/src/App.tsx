@@ -6,6 +6,7 @@ import { PipelinePage } from "./pages/PipelinePage";
 import { EnforcerPage } from "./pages/EnforcerPage";
 import { TestSpritePage } from "./pages/TestSpritePage";
 import { StatusPage } from "./pages/StatusPage";
+import { VideosPage } from "./pages/VideosPage";
 import {
   fetchCredentialsStatus,
   fetchRepos,
@@ -160,7 +161,7 @@ export function App() {
         </Link>
 
         <nav style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "8px" }}>
-          <Link to="/" style={navLinkStyle(isActive("/") && !isActive("/pipeline") && !isActive("/enforcers") && !isActive("/tests") && !isActive("/status"))}>
+          <Link to="/" style={navLinkStyle(isActive("/") && !isActive("/pipeline") && !isActive("/enforcers") && !isActive("/tests") && !isActive("/videos") && !isActive("/status"))}>
             Rules
           </Link>
           <Link to="/pipeline" style={navLinkStyle(isActive("/pipeline"))}>
@@ -171,6 +172,9 @@ export function App() {
           </Link>
           <Link to="/tests" style={navLinkStyle(isActive("/tests"))}>
             Tests
+          </Link>
+          <Link to="/videos" style={navLinkStyle(isActive("/videos"))}>
+            Videos
           </Link>
           <Link to="/status" style={navLinkStyle(isActive("/status"))}>
             Status
@@ -287,6 +291,7 @@ export function App() {
           <Route path="/pipeline" element={<PipelinePage />} />
           <Route path="/enforcers" element={<EnforcerPage repoId={selectedRepoId} />} />
           <Route path="/tests" element={<TestSpritePage repoId={selectedRepoId} />} />
+          <Route path="/videos" element={<VideosPage />} />
           <Route path="/status" element={<StatusPage />} />
         </Routes>
       </main>

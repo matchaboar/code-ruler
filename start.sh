@@ -53,7 +53,14 @@ if [ "$CHECK" = true ]; then
   echo "All checks passed."
 fi
 
-# ── 5. Launch the app ──
+# ── 5. Kill any existing process on port 8000 ──
+if pid=$(lsof -ti tcp:8000 2>/dev/null); then
+  echo "Killing existing process on port 8000 (PID: $pid)..."
+  kill $pid 2>/dev/null || true
+  sleep 1
+fi
+
+# ── 6. Launch the app ──
 echo ""
 echo "Starting Code Ruler at http://127.0.0.1:8000"
 echo ""

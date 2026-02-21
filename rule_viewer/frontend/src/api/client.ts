@@ -269,6 +269,7 @@ export function generateEnforcer(slug: string): Promise<JobStartResponse> {
 export interface VideoResponse {
   task_id: string;
   status: string;
+  slug: string | null;
   file_id: string | null;
   download_url: string | null;
   error: string | null;
@@ -288,6 +289,27 @@ export function fetchVideoStatus(taskId: string): Promise<VideoResponse> {
   return apiFetch<VideoResponse>(
     `/api/video/${encodeURIComponent(taskId)}`
   );
+}
+
+export function fetchRuleVideo(slug: string): Promise<VideoResponse> {
+  return apiFetch<VideoResponse>(
+    `/api/rules/${encodeURIComponent(slug)}/video`
+  );
+}
+
+export interface VideoListItem {
+  id: number;
+  rule_slug: string;
+  rule_title: string;
+  task_id: string;
+  status: string;
+  download_url: string | null;
+  error: string | null;
+  created_at: string;
+}
+
+export function fetchVideos(): Promise<VideoListItem[]> {
+  return apiFetch<VideoListItem[]>("/api/videos");
 }
 
 // ---- TestSprite types and helpers ----

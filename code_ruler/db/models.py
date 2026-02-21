@@ -38,6 +38,7 @@ class Rule(Base):
         back_populates="rule", uselist=False
     )
     testsprite_results: Mapped[list[TestSpriteResult]] = relationship(back_populates="rule")
+    video_tasks: Mapped[list[VideoTask]] = relationship(back_populates="rule")
     provenance: Mapped[list[RuleProvenance]] = relationship(back_populates="rule")
     repository = relationship("Repository", foreign_keys=[repo_id])
 
@@ -143,3 +144,20 @@ class TestSpriteResult(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     rule: Mapped[Rule] = relationship(back_populates="testsprite_results")
+
+
+class VideoTask(Base):
+    __tablename__ = "video_tasks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rule_id: Mapped[int] = mapped_column(ForeignKey("rules.id"), nullable=False)
+    task_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="Processing")
+    file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    download_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    rule: Mapped[Rule] = relationship(back_populates="video_tasks")

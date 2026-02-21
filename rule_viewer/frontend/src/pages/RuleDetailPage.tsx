@@ -8,6 +8,7 @@ import {
   generateEnforcer,
   generateVideo,
   fetchVideoStatus,
+  fetchRuleVideo,
   generateTestSprite,
   fetchRuleTestSpriteResults,
   type RuleDetail,
@@ -17,6 +18,7 @@ import {
   type TestSpriteListItem,
 } from "../api/client";
 import { CodeBlock } from "../components/CodeBlock";
+import { DiffView } from "../components/DiffView";
 import { ProvenanceCard } from "../components/ProvenanceCard";
 import { TabBar } from "../components/TabBar";
 
@@ -251,6 +253,39 @@ export function RuleDetailPage({ repoId }: { repoId: number | null }) {
         setProvenance(provData);
         fetchEnforcer(slug).then(setEnforcer).catch(() => setEnforcer(null));
         fetchRuleTestSpriteResults(slug).then(setTsResults).catch(() => setTsResults([]));
+        fetchRuleVideo(slug)
+          .then((video) => {
+            if (video.status === "Success") {
+              setVideoResult(video);
+            } else if (video.status === "Fail") {
+              setVideoError(video.error || "Video generation failed");
+            } else if (video.status === "Processing") {
+              setVideoGenerating(true);
+              videoStartRef.current = Date.now();
+              const pollId = setInterval(() => {
+                fetchVideoStatus(video.task_id)
+                  .then((status) => {
+                    if (status.status === "Success") {
+                      clearInterval(pollId);
+                      setVideoResult(status);
+                      setVideoGenerating(false);
+                    } else if (status.status === "Fail") {
+                      clearInterval(pollId);
+                      setVideoError(status.error || "Video generation failed");
+                      setVideoGenerating(false);
+                    }
+                  })
+                  .catch(() => {
+                    clearInterval(pollId);
+                    setVideoError("Failed to check video status");
+                    setVideoGenerating(false);
+                  });
+              }, 5000);
+            }
+          })
+          .catch(() => {
+            // No existing video task — that's fine
+          });
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Failed to load rule");
@@ -583,7 +618,7 @@ export function RuleDetailPage({ repoId }: { repoId: number | null }) {
             )}
 
             {enforcerTab === "diff" && enforcer.diff && (
-              <CodeBlock code={enforcer.diff} language="diff" />
+              <DiffView diffHunk={enforcer.diff} />
             )}
 
             {enforcerTab === "decorator" && enforcer.decorator_source && (

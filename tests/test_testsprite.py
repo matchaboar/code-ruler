@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
@@ -249,39 +250,57 @@ def test_testsprite_result_relationship(db_session, sample_rule):
 
 # ---- TestSprite client tests ----
 
+def _make_mock_mcp():
+    """Create a mock MCPClient that works as a context manager."""
+    mock_mcp = MagicMock()
+    mock_mcp.__enter__ = MagicMock(return_value=mock_mcp)
+    mock_mcp.__exit__ = MagicMock(return_value=False)
+    mock_mcp.call_tool.return_value = {"content": [{"type": "text", "text": "ok"}]}
+    return mock_mcp
+
+
 @patch("code_ruler.testsprite.client._clone_repo")
-@patch("code_ruler.testsprite.client._api_post")
-def test_generate_tests_success(mock_api_post, mock_clone, db_session, sample_rule):
-    """Test the full generate_tests flow with mocked API calls."""
+@patch("code_ruler.testsprite.client.MCPClient")
+def test_generate_tests_success(mock_mcp_cls, mock_clone, db_session, sample_rule, tmp_path):
+    """Test the full generate_tests flow with mocked MCP calls."""
     from code_ruler.testsprite.client import generate_tests
 
     mock_clone.return_value = None
-    mock_api_post.side_effect = [
-        # code summary response
-        {"summary": "A Python project with error handling patterns."},
-        # test plan response
-        {"test_plan": {"tests": [{"name": "test_bare_except", "type": "unit"}]}},
-        # generate and execute response
-        {
-            "generated_files": [],
-            "test_results": {"passed": 1, "failed": 0},
-            "generated_tests": "def test_bare_except():\n    assert True\n",
-        },
-    ]
+    mock_mcp = _make_mock_mcp()
 
-    result = generate_tests(db_session, sample_rule, "https://github.com/test/repo")
+    mock_mcp_cls.return_value = mock_mcp
+
+    # Write test files and results to tmpdir so the filesystem collection works
+    with patch("code_ruler.testsprite.client.tempfile") as mock_tempfile:
+        test_dir = tmp_path / "testsprite_test"
+        test_dir.mkdir()
+        mock_tempfile.mkdtemp.return_value = str(test_dir)
+
+        # Create a generated test file
+        tests_subdir = test_dir / "tests"
+        tests_subdir.mkdir()
+        test_file = tests_subdir / "test_bare_except.py"
+        test_file.write_text("def test_bare_except():\n    assert True\n")
+
+        # Create test_results.json
+        results_file = test_dir / "test_results.json"
+        results_file.write_text(json.dumps({"passed": 1, "failed": 0}))
+
+        with patch("code_ruler.testsprite.client.shutil"):
+            result = generate_tests(db_session, sample_rule, "https://github.com/test/repo")
+
     assert result.status == "completed"
-    assert result.generated_tests == "def test_bare_except():\n    assert True\n"
+    assert "test_bare_except" in result.generated_tests
     assert result.test_results_json == {"passed": 1, "failed": 0}
-    assert result.test_plan_json == {"tests": [{"name": "test_bare_except", "type": "unit"}]}
+    assert result.test_plan_json is not None  # Written from rule, not from MCP
     assert result.diff is not None
     assert "+def test_bare_except" in result.diff
-    assert mock_api_post.call_count == 3
+    assert mock_mcp.call_tool.call_count == 1  # generate_code_and_execute only (no bootstrap)
 
 
 @patch("code_ruler.testsprite.client._clone_repo")
-@patch("code_ruler.testsprite.client._api_post")
-def test_generate_tests_clone_failure(mock_api_post, mock_clone, db_session, sample_rule):
+@patch("code_ruler.testsprite.client.MCPClient")
+def test_generate_tests_clone_failure(mock_mcp_cls, mock_clone, db_session, sample_rule):
     """Test that clone failure sets status to 'failed'."""
     from code_ruler.testsprite.client import generate_tests
 
@@ -298,35 +317,33 @@ def test_generate_tests_clone_failure(mock_api_post, mock_clone, db_session, sam
 
 
 @patch("code_ruler.testsprite.client._clone_repo")
-@patch("code_ruler.testsprite.client._api_post")
-def test_generate_tests_api_failure(mock_api_post, mock_clone, db_session, sample_rule):
-    """Test that API failure during generation sets status to 'failed'."""
+@patch("code_ruler.testsprite.client.MCPClient")
+def test_generate_tests_mcp_failure(mock_mcp_cls, mock_clone, db_session, sample_rule):
+    """Test that MCP failure during generation sets status to 'failed'."""
     from code_ruler.testsprite.client import generate_tests
 
     mock_clone.return_value = None
-    mock_api_post.side_effect = [
-        {"summary": "A Python project."},
-        Exception("TestSprite API error: 500 Internal Server Error"),
-    ]
+    mock_mcp = _make_mock_mcp()
 
-    with pytest.raises(Exception, match="TestSprite API error"):
+    mock_mcp.call_tool.side_effect = RuntimeError("MCP tool error: server crashed")
+    mock_mcp_cls.return_value = mock_mcp
+
+    with pytest.raises(RuntimeError, match="MCP tool error"):
         generate_tests(db_session, sample_rule, "https://github.com/test/repo")
 
     results = get_testsprite_results_by_rule_id(db_session, sample_rule.id)
     assert len(results) == 1
     assert results[0].status == "failed"
-    assert "TestSprite API error" in results[0].error_message
+    assert "MCP tool error" in results[0].error_message
 
 
 @patch("code_ruler.testsprite.client._clone_repo")
-@patch("code_ruler.testsprite.client._api_post")
-def test_generate_tests_status_transitions(mock_api_post, mock_clone, db_session, sample_rule):
+@patch("code_ruler.testsprite.client.MCPClient")
+def test_generate_tests_status_transitions(mock_mcp_cls, mock_clone, db_session, sample_rule, tmp_path):
     """Test that status transitions happen in correct order."""
     from code_ruler.testsprite.client import generate_tests
 
     observed_statuses = []
-
-    original_update = update_testsprite_result.__wrapped__ if hasattr(update_testsprite_result, '__wrapped__') else None
 
     def track_status(session, result, **kwargs):
         if "status" in kwargs:
@@ -339,14 +356,17 @@ def test_generate_tests_status_transitions(mock_api_post, mock_clone, db_session
         return result
 
     mock_clone.return_value = None
-    mock_api_post.side_effect = [
-        {"summary": "Summary"},
-        {"test_plan": {"tests": []}},
-        {"generated_files": [], "test_results": {}, "generated_tests": ""},
-    ]
+    mock_mcp = _make_mock_mcp()
+    mock_mcp_cls.return_value = mock_mcp
 
-    with patch("code_ruler.testsprite.client.update_testsprite_result", side_effect=track_status):
-        generate_tests(db_session, sample_rule, "https://github.com/test/repo")
+    with patch("code_ruler.testsprite.client.tempfile") as mock_tempfile:
+        test_dir = tmp_path / "testsprite_status"
+        test_dir.mkdir()
+        mock_tempfile.mkdtemp.return_value = str(test_dir)
+
+        with patch("code_ruler.testsprite.client.shutil"):
+            with patch("code_ruler.testsprite.client.update_testsprite_result", side_effect=track_status):
+                generate_tests(db_session, sample_rule, "https://github.com/test/repo")
 
     # Should see: generating, (test_plan update has no status), running, completed
     assert "generating" in observed_statuses

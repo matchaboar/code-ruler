@@ -131,9 +131,21 @@ class GenerateVideoRequest(BaseModel):
 class VideoResponse(BaseModel):
     task_id: str
     status: str
+    slug: str | None = None
     file_id: str | None = None
     download_url: str | None = None
     error: str | None = None
+
+
+class VideoListItem(BaseModel):
+    id: int
+    rule_slug: str
+    rule_title: str
+    task_id: str
+    status: str
+    download_url: str | None = None
+    error: str | None = None
+    created_at: str
 
 
 class EnforcerListItem(BaseModel):
@@ -183,9 +195,9 @@ class TestSpriteDetail(BaseModel):
     rule_title: str
     repo_url: str
     status: str
-    test_plan: dict | None
+    test_plan: dict | list | None
     generated_tests: str | None
-    test_results: dict | None
+    test_results: dict | list | None
     diff: str | None
     error_message: str | None
     created_at: str
